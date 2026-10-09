@@ -128,6 +128,34 @@
   .scorebar{height:7px; border-radius:5px; background:var(--panel); overflow:hidden; margin-top:4px}
   .scorebar>i{display:block; height:100%; background:var(--accent)}
   .grow{display:flex; gap:8px; align-items:center}
+  /* 一站式 RAG 流水线 Stepper */
+  .pipeline{display:flex; flex-wrap:wrap; align-items:stretch; gap:4px; padding:12px 14px; border-bottom:1px solid var(--line); background:var(--panel2); position:sticky; top:0; z-index:5}
+  .pnode{flex:1 1 0; min-width:96px; display:flex; flex-direction:column; align-items:center; text-align:center; padding:6px 4px; border:1px solid var(--line); border-radius:10px; background:var(--panel); position:relative; transition:.2s}
+  .pnode .pdot{width:22px; height:22px; border-radius:50%; background:var(--panel2); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--sub); position:relative}
+  .pnode .pdot .pchk{display:none; color:#3ddc84; font-size:13px}
+  .pnode .plabel{font-size:11.5px; font-weight:600; margin-top:4px; color:var(--txt)}
+  .pnode .pdetail{font-size:10px; color:var(--sub); margin-top:2px; line-height:1.3; min-height:13px}
+  .pnode.idle{opacity:.85}
+  .pnode.later{opacity:.4}
+  .pnode.ready .pdot{background:rgba(61,220,132,.12); border-color:#3ddc84; color:#3ddc84}
+  .pnode.ready .plabel{color:#9fe6b8}
+  .pnode.done{border-color:#3ddc84}
+  .pnode.done .pdot{background:#3ddc84; border-color:#3ddc84; color:#06281a}
+  .pnode.done .pdot .pnum{display:none}
+  .pnode.done .pdot .pchk{display:block}
+  .pnode.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(88,166,255,.25)}
+  .pnode.active .pdot{background:var(--accent); border-color:var(--accent); color:#04101f}
+  .pnode.active .plabel{color:var(--accent)}
+  .pnode.active .pdot{animation:pulse 1.1s infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(88,166,255,.5)}50%{box-shadow:0 0 0 5px rgba(88,166,255,0)}}
+  .pnode.skip{opacity:.5}
+  .pnode.skip .pdot{background:transparent}
+  .pnode.fallback{border-color:#ffb454; box-shadow:0 0 0 2px rgba(255,180,84,.25)}
+  .pnode.fallback .pdot{background:#ffb454; border-color:#ffb454; color:#3a2400}
+  .pnode.fallback .plabel{color:#ffb454}
+  .pnode.error{border-color:#ff6b6b}
+  .pnode.error .pdot{background:#ff6b6b; border-color:#ff6b6b; color:#3a0000}
+  .parrow{display:flex; align-items:center; color:var(--sub); font-size:13px; align-self:center}
 </style>
 </head>
 <body>
@@ -151,6 +179,7 @@
 </div>
 
 <main id="main">
+  <div class="pipeline" id="pipeline"></div>
   <div id="messages"></div>
   <div class="inputbar">
     <div class="inputwrap">
@@ -266,7 +295,9 @@
       <div class="body">
         <label class="chk"><input type="checkbox" data-cfg="rerank.enable"> 启用结果重排（使用上方 Rerank 模型，未配置则大模型打分）</label>
         <div class="field"><label>重排后进入上下文的数量</label><input type="number" data-cfg="rerank.topN" placeholder="5"></div>
-        <label class="chk"><input type="checkbox" data-cfg="gen.allowFallback"> 检索不足时仍让模型自由回答</label>
+        <div class="field"><label>上下文治理 · 最大上下文 token 预算（超出裁剪，保护上下文窗口）</label><input type="number" data-cfg="context.maxTokens" placeholder="2000"></div>
+        <div class="field"><label>上下文治理 · 重复片段丢弃阈值（相邻片段重叠度 ≥ 此值则丢弃，0=不丢弃）</label><input type="number" step="0.05" data-cfg="context.dedup" placeholder="0.55"></div>
+        <label class="chk"><input type="checkbox" data-cfg="gen.allowFallback"> 检索不足时仍让模型自由回答（否则触发兜底提示）</label>
         <label class="chk"><input type="checkbox" data-cfg="demo"> 演示模式（无需 Key，本地伪向量演示流程）</label>
       </div>
     </div>
@@ -355,6 +386,7 @@ const DEFAULTS = {
   rerank:{baseUrl:"",apiKey:"",model:"BAAI/bge-reranker-v2-m3"},
   chunk:{strategy:"fixed",size:200,overlap:30,semThreshold:0.5},
   retrieve:{mode:"hybrid",candidateK:20,topK:5,fusion:"rrf",minScore:0},
+  context:{maxTokens:2000, dedup:0.55},
   rewrite:{enable:false,mode:"single",prompt:""},
   rerank:{enable:false,topN:5},
   gen:{allowFallback:false},
@@ -626,24 +658,50 @@ async function rerank(query,items,cfg){
 }
 
 /* ============ 检索 + 回答（对话与测评共用） ============ */
-async function retrieveAndAnswer(q){
+async function retrieveAndAnswer(q, opts={}){
+  const trace = !opts.silent;
+  if(trace) resetPipeline("qa");
+  // ③ 改写
+  if(trace) setStage("rewrite", cfg.rewrite.enable?"active":"skip", cfg.rewrite.enable?"改写问题…":"未启用");
   const qs=await rewriteQuery(q,cfg);
+  if(trace) setStage("rewrite", cfg.rewrite.enable?"done":"skip", cfg.rewrite.enable?("→ "+qs[0].slice(0,28)):"跳过");
+  // ④ 召回
+  if(trace) setStage("recall","active","向量化问题并召回候选…");
   currentQueryVec=(await embedTexts([qs[0]],cfg))[0];
   let cand=search(qs[0],cfg);
+  if(trace) setStage("recall","done",`召回 ${cand.length} 个候选片段`);
+  // ⑤ 重排
+  if(trace) setStage("rerank", cfg.rerank.enable?"active":"skip", cfg.rerank.enable?"重排候选…":"未启用（用融合分）");
   cand=await rerank(qs[0],cand,cfg);
+  if(trace) setStage("rerank", cfg.rerank.enable?"done":"skip", cfg.rerank.enable?`取前 ${cfg.rerank.topN}`:"跳过");
   const topK=+cfg.retrieve.topK||5;
   const top=cand.slice(0,topK);
   const minS=+cfg.retrieve.minScore||0;
   const best=top[0] ? (top[0].score ?? top[0].cos) : 0;
+  // ⑥ 上下文治理
+  if(trace) setStage("govern","active","去重 · 预算裁剪 · 装配引用…");
+  const gov=governContext(top, cfg);
+  if(trace) setStage("govern","done",`采用 ${gov.usedItems.length} 段 · 弃 ${gov.dropped} · ${gov.tokens} tok`);
+  // 阈值判定 → 兜底
   if(minS>0 && best<minS){
-    return { refused:true, best, query:qs[0] };
+    if(cfg.gen.allowFallback){
+      if(trace) setStage("answer","fallback","低于阈值，模型自由回答兜底");
+      const answer=await llmChat([
+        {role:"system",content:"你是企业知识库助手。当前问题在知识库中未检索到足够相关的内容，请基于你的通用常识谨慎回答，并在开头说明：以下不是来自企业资料，仅供参考。"},
+        {role:"user",content:q}],cfg);
+      return {answer, contexts:[], refs:[], query:qs[0], fallback:true, governed:gov, best};
+    }
+    if(trace) setStage("answer","fallback","低于阈值，触发兜底提示");
+    return {refused:true, best, query:qs[0], governed:gov};
   }
-  const ctx=top.map(it=>KB.chunks[it.i]);
+  // ⑦ 生成
+  if(trace) setStage("answer","active",`组织 ${gov.contexts.length} 段上下文并生成…`);
   const answer=await llmChat([
     {role:"system",content:"你是企业知识库助手。只依据【资料】回答，不要编造。若资料不足，明确说明。用中文简洁回答，并标注引用编号。"},
-    {role:"user",content:`【资料】\n${ctx.map((c,i)=>`[${i+1}] ${c}`).join("\n\n")}\n\n【问题】${q}`}
+    {role:"user",content:`【资料】\n${gov.text}\n\n【问题】${q}`}
   ],cfg);
-  return { answer, contexts:ctx, refs:top.map(it=>KB.chunks[it.i]), query:qs[0] };
+  if(trace) setStage("answer","done",`已生成（引用 ${gov.contexts.length} 段）`);
+  return {answer, contexts:gov.contexts, refs:gov.contexts, query:qs[0], governed:gov, best};
 }
 
 /* ============ 配置 UI ============ */
@@ -699,6 +757,60 @@ function renderMessages(){
   box.scrollTop=box.scrollHeight;
 }
 function addSys(t){ pushMsg({role:"sys",content:t}); }
+
+/* ============ 一站式 RAG 流水线（SaaS 可视化，告诉用户当前在哪一步） ============ */
+const PIPE_STAGES = [
+  {key:"chunk",   label:"① 切块",     phase:"ingest"},
+  {key:"embed",   label:"② 向量化",   phase:"ingest"},
+  {key:"rewrite", label:"③ 改写",     phase:"qa"},
+  {key:"recall",  label:"④ 召回",     phase:"qa"},
+  {key:"rerank",  label:"⑤ 重排",     phase:"qa"},
+  {key:"govern",  label:"⑥ 上下文治理", phase:"qa"},
+  {key:"answer",  label:"⑦ 生成/兜底", phase:"qa"}
+];
+const PSTATE = {};   // key -> {state, detail}
+function renderPipeline(){
+  const box=$("#pipeline"); if(!box) return;
+  box.innerHTML = PIPE_STAGES.map((s,idx)=>
+    `<div class="pnode idle" data-pk="${s.key}">
+       <div class="pdot"><span class="pnum">${idx+1}</span><span class="pchk">✓</span></div>
+       <div class="plabel">${s.label}</div>
+       <div class="pdetail" data-pd="${s.key}"></div>
+     </div>${idx<PIPE_STAGES.length-1?'<div class="parrow">→</div>':''}`).join("");
+  PIPE_STAGES.forEach(s=>{ const st=PSTATE[s.key]; if(st) setStage(s.key, st.state, st.detail); });
+}
+function setStage(key, state, detail){
+  PSTATE[key]={state, detail:detail||""};
+  const node=$(`[data-pk="${key}"]`); if(!node) return;
+  node.className="pnode "+state;
+  const d=$(`[data-pd="${key}"]`); if(d) d.textContent = detail||"";
+}
+function resetPipeline(phase){
+  PIPE_STAGES.forEach(s=>{
+    let st="idle";
+    if(phase==="qa"){ if(s.phase==="ingest") st="done"; }      // 问答时，建库阶段已就绪
+    else { if(s.phase==="qa") st="later"; }                     // 建库时，问答阶段尚未开始
+    setStage(s.key, st, "");
+  });
+}
+
+/* ============ 上下文治理（重排之后、生成之前） ============ */
+function governContext(items, cfg){
+  const maxTok = Math.max(100, +cfg.context.maxTokens || 2000);
+  const dedupTh = Math.max(0, Math.min(0.95, +cfg.context.dedup || 0));
+  const picked=[], usedItems=[]; let tok=0, dup=0, overBudget=0;
+  for(const it of items){
+    const text = KB.chunks[it.i];
+    const tcount = countTokens(text);
+    let isDup=false;
+    for(const p of picked){ if(overlapRatio(grams(text), grams(p))>=dedupTh){ isDup=true; break; } }
+    if(isDup){ dup++; continue; }
+    if(tok+tcount>maxTok){ overBudget++; continue; }
+    picked.push(text); usedItems.push(it); tok+=tcount;
+  }
+  const text = picked.map((c,i)=>`[${i+1}] ${c}`).join("\n\n");
+  return {contexts:picked, usedItems, dropped:dup+overBudget, dup, overBudget, tokens:tok, text};
+}
 
 /* 文档解析 */
 async function parseFile(file){
@@ -758,7 +870,8 @@ function delSession(id){
 
 /* ============ 文档管理 ============ */
 async function handleFiles(files){
-  if(S.docs.length===0 && KB.chunks.length===0){ /* 首次 */ }
+  resetPipeline("ingest");
+  setStage("chunk","active","解析文档并切块…");
   for(const f of files){
     try{
       addSys(`解析 ${f.name} …`);
@@ -769,13 +882,15 @@ async function handleFiles(files){
     }catch(err){ addSys(`✗ ${f.name} 失败：${err.message}`); }
   }
   KB.docs=S.docs; KB.chunks=S.docs.flatMap(d=>d.chunks);
+  setStage("chunk","done",`${KB.chunks.length} 个切片`);
   renderDocs(); await rebuildIndex();
 }
 async function rebuildIndex(){
   if(KB.chunks.length===0){ KB.built=false; S.vectors=[]; save(); updateChunkStat(); return; }
-  addSys("正在向量化并建索引 …");
-  try{ await indexDocs(cfg); S.vectors=KB.vectors; save(); addSys(`✓ 索引完成：${KB.chunks.length} 个切片`); }
-  catch(e){ addSys("✗ 索引失败："+e.message); }
+  setStage("chunk","done",`${KB.chunks.length} 个切片`);
+  setStage("embed","active","向量化并建索引…");
+  try{ await indexDocs(cfg); S.vectors=KB.vectors; save(); addSys(`✓ 索引完成：${KB.chunks.length} 个切片`); setStage("embed","done",`${KB.chunks.length} 切片已向量化`); }
+  catch(e){ addSys("✗ 索引失败："+e.message); setStage("embed","error","失败："+e.message); }
   updateChunkStat();
 }
 function updateChunkStat(){
@@ -808,7 +923,11 @@ async function send(){
   try{
     const out=await retrieveAndAnswer(q);
     if(out.refused){
-      pushMsg({role:"ai",content:`抱歉，根据当前知识库检索到的内容相关性不足（最高分 ${fmt(out.best)} < 阈值），无法可靠回答这个问题。\n\n你可以：换个问法、上传更多相关文档，或降低拒答阈值。`,refs:[]});
+      pushMsg({role:"ai",content:`⚠️ 兜底提示：当前知识库检索到的内容相关性不足（最高分 ${fmt(out.best)} < 拒答阈值 ${cfg.retrieve.minScore}），无法可靠回答。\n\n建议：① 换个问法；② 上传更多相关文档；③ 在 ⚙ 配置 降低拒答阈值，或开启「检索不足时仍让模型自由回答」。`,refs:[]});
+      return;
+    }
+    if(out.fallback){
+      pushMsg({role:"ai",content:"（⚠️ 兜底：未达阈值，以下为模型基于通用常识的回答，非来自你的知识库）\n\n"+esc(out.answer),refs:[]});
       return;
     }
     pushMsg({role:"ai",content:esc(out.answer),refs:out.refs});
@@ -855,7 +974,7 @@ async function runEval(){
     const item=S.testSet[idx];
     status.textContent=`测评进行中…（${idx+1}/${S.testSet.length}）「${item.question.slice(0,16)}」`;
     try{
-      const out=await retrieveAndAnswer(item.question);
+      const out=await retrieveAndAnswer(item.question, {silent:true});
       let scores;
       if(cfg.demo){ scores=scoreHeuristic(item,out); }
       else { scores= await judgeItem(item,out,cfg) || scoreHeuristic(item,out); }
@@ -981,7 +1100,7 @@ $("#btnRunEval").onclick=runEval;
 
 /* 初始化 */
 if(window.pdfjsLib){ try{ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"; }catch(e){} }
-renderCfg(); renderSessions(); syncKBFromSession(); renderDocs(); renderMessages(); renderTestList(); renderEvalResults();
+renderCfg(); renderSessions(); syncKBFromSession(); renderDocs(); renderMessages(); renderTestList(); renderEvalResults(); renderPipeline();
 $("#sidebar").classList.remove("hide"); $("#main").classList.add("shifted");
 addSys("欢迎使用 RAG 工作台（多会话版）。左侧管理多个 RAG 会话，每个会话独立配置、文档与对话。右上角 ⚙ 配置 / 📄 文档 / 📊 测评。开启演示模式可零配置体验。");
 </script>
