@@ -102,12 +102,15 @@
   .sidebar .sh{padding:13px 14px; border-bottom:1px solid var(--line); font-weight:600; display:flex; align-items:center; gap:8px}
   .sidebar .sh .x{margin-left:auto; cursor:pointer; color:var(--sub)}
   .slist{flex:1; overflow:auto; padding:10px}
-  .scard{padding:10px 12px; border:1px solid var(--line); border-radius:10px; margin:8px 0; cursor:pointer; background:var(--panel2)}
+  .scard{padding:10px 12px; border:1px solid var(--line); border-radius:10px; margin:8px 0; cursor:pointer; background:var(--panel2); position:relative}
   .scard.active{border-color:var(--accent); background:#1b2336}
-  .scard .nm{font-weight:600; font-size:13px; display:flex; align-items:center}
-  .scard .nm input{border:none; background:transparent; color:var(--txt); font:inherit; font-weight:600; width:100%; outline:none}
+  .scard .nm{font-weight:600; font-size:13px; display:flex; align-items:center; padding-right:18px}
+  .scard .nm input{border:none; background:transparent; color:var(--txt); font:inherit; font-weight:600; width:100%; outline:none; cursor:text}
+  .scard .nm input:hover{text-decoration:underline dotted var(--sub)}
   .scard .meta{font-size:11px; color:var(--sub); margin-top:4px}
-  .scard .acts{display:flex; gap:6px; margin-top:8px}
+  .del-x{position:absolute; top:7px; right:7px; width:20px; height:20px; line-height:18px; text-align:center; border:none; background:transparent; color:var(--sub); cursor:pointer; opacity:0; border-radius:6px; font-size:13px; transition:.15s}
+  .scard:hover .del-x{opacity:.65}
+  .del-x:hover{background:rgba(255,80,80,.16); color:#ff6b6b; opacity:1}
   /* 测评 */
   .tabs{display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap}
   .tab{padding:6px 11px; border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:12px; background:var(--panel2)}
@@ -421,7 +424,7 @@ function switchSession(id){
   const ns = STATE.sessions.find(x=>x.id===id); if(!ns) return;
   STATE.activeId=id; S=ns; cfg=S.config;
   renderCfg(); syncKBFromSession(); renderDocs(); renderMessages(); renderTestList(); renderEvalResults();
-  $("#main").classList.add("shifted"); $("#sidebar").classList.remove("hide");
+  $("#main").classList.remove("shifted"); $("#sidebar").classList.add("hide");
   renderSessions(); save();
 }
 
@@ -726,17 +729,17 @@ function renderSessions(){
     const el=document.createElement("div"); el.className="scard"+(s.id===STATE.activeId?" active":"");
     const docN=s.docs.length, chunkN=s.docs.reduce((a,d)=>a+d.chunks.length,0);
     el.innerHTML=`
-      <div class="nm"><input value="${esc(s.name)}" data-rename="${s.id}"></div>
-      <div class="meta">${docN} 文档 · ${chunkN} 切片 · ${s.chat.filter(c=>c.role!=='sys').length} 轮对话</div>
-      <div class="acts">
-        <button class="btn-mini" data-switch="${s.id}">打开</button>
-        <button class="btn-mini danger" data-del="${s.id}">删除</button>
-      </div>`;
+      <button class="del-x" data-del="${s.id}" title="删除会话">✕</button>
+      <div class="nm"><input value="${esc(s.name)}" data-rename="${s.id}" title="点击修改会话名称，回车保存"></div>
+      <div class="meta">${docN} 文档 · ${chunkN} 切片 · ${s.chat.filter(c=>c.role!=='sys').length} 轮对话</div>`;
+    el.onclick=()=>switchSession(s.id);
     list.appendChild(el);
   });
-  $$("[data-switch]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); switchSession(b.dataset.switch); });
   $$("[data-del]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); delSession(b.dataset.del); });
-  $$("[data-rename]").forEach(inp=>inp.onchange=e=>{ const s=STATE.sessions.find(x=>x.id===e.target.dataset.rename); if(s){ s.name=e.target.value.trim()||s.name; save(); renderSessions(); } });
+  $$("[data-rename]").forEach(inp=>{
+    inp.onclick=e=>e.stopPropagation();
+    inp.onchange=e=>{ const s=STATE.sessions.find(x=>x.id===e.target.dataset.rename); if(s){ s.name=e.target.value.trim()||s.name; save(); renderSessions(); } };
+  });
 }
 function newSession(){
   const s=newSessionObj("RAG 会话 "+(STATE.sessions.length+1));
