@@ -63,18 +63,25 @@ export function sliceByTokens(text, size, overlap = 0) {
     acc += units[i].w;
     if (acc >= size) {
       push(start);
-      // 计算下一块的起点：回退 overlap 个 token 的单元
-      let back = 0;
-      let j = buf.length - 1;
-      while (j > 0 && back < overlap) {
-        back += buf[j].w;
-        j--;
+      if (overlap > 0) {
+        // 计算下一块的起点：回退 overlap 个 token 的单元
+        let back = 0;
+        let j = buf.length - 1;
+        while (j > 0 && back < overlap) {
+          back += buf[j].w;
+          j--;
+        }
+        const keepCount = Math.max(1, buf.length - 1 - j);
+        const carried = buf.slice(buf.length - keepCount);
+        start = i + 1 - carried.length;
+        buf = carried;
+        acc = carried.reduce((a, u) => a + u.w, 0);
+      } else {
+        // overlap 关闭：不回退，下一块从当前单元之后开始（严格无重叠）
+        start = i + 1;
+        buf = [];
+        acc = 0;
       }
-      const keepCount = Math.max(1, buf.length - 1 - j);
-      const carried = buf.slice(buf.length - keepCount);
-      start = i + 1 - carried.length;
-      buf = carried;
-      acc = carried.reduce((a, u) => a + u.w, 0);
     }
   }
   if (buf.length) push(start);

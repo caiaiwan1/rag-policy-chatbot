@@ -53,6 +53,17 @@ node tools/smoke-test.js        # 自动跑通全链路并打印各环节结果
 
 `tools/smoke-test.js` 会依次验证：连通性 → 上传解析 → 四种分块策略对比 → overlap 生效检测 → 建索引 → 三种检索模式对比 → 完整问答（改写/召回/重排/引用）→ 阈值拒答。
 
+### 容器化部署（Docker）
+
+无需在本机装 Node，一条命令起服务：
+
+```bash
+docker compose up -d                  # 构建并启动，访问 http://localhost:5178
+docker compose --profile mock up -d   # 额外拉起本地 Mock 模型，零 API Key 即可完整体验
+```
+
+`data/` 已挂载为卷持久化（`config.json` 里的 API Key、上传文档、向量索引都在这里，请勿提交）。改端口在 `docker-compose.yml` 的 `ports` 映射即可。
+
 ---
 
 ## 三、界面导览
@@ -111,6 +122,10 @@ rag-agent/
 ├── tools/
 │   ├── mock-server.js     本地 Mock 模型服务
 │   └── smoke-test.js      端到端冒烟测试
+├── test/                 单元测试（tokenizer / chunk / retrieve 核心算法，纯本地）
+├── Dockerfile            生产镜像（多阶段，约 200MB）
+├── docker-compose.yml    一键部署（含可选 Mock 体验服务）
+├── .github/workflows/ci.yml   CI：Node 18/20 矩阵自动跑 npm test
 └── docs/sample.md         示例文档
 ```
 
@@ -146,7 +161,22 @@ rag-agent/
 
 ---
 
-## 九、可以继续扩展的方向
+## 九、测试与 CI
+
+核心算法（分词、分块、检索/融合）有纯本地单元测试，不依赖任何外部模型服务：
+
+```bash
+npm test            # 运行 test/ 下的单元测试（当前 21 项）
+npm run test:e2e    # 需先启动 server + mock，跑端到端冒烟测试
+```
+
+`test/` 覆盖：token 估算与边界、四种分块策略与 overlap 机制、BM25、三种检索模式（语义 / BM25 / 混合）与分数归一化——后者重点验证 **RRF 归一化不会让第一名恒为 1 而失去阈值区分度**。
+
+仓库通过 GitHub Actions 做 CI：每次 push / PR 在 **Node 18、20** 两个版本上自动 `npm ci` 并 `npm test`，并对 `server.js`、`tools/mock-server.js` 做语法检查。
+
+---
+
+## 十、可以继续扩展的方向
 
 - 多路召回合并（多知识库 / 结构化表格单独召回）
 - 引用级校验：让模型判断每个引用是否真的支撑了对应句子

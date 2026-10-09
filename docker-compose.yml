@@ -1,0 +1,24 @@
+# RAG Agent Studio 一键部署
+#   docker compose up -d            # 启动应用（访问 http://localhost:5178）
+#   docker compose --profile mock up -d   # 额外启动本地 Mock 模型，零 API Key 即可体验
+services:
+  rag-agent:
+    build: .
+    ports:
+      - "5178:5178"
+    environment:
+      - PORT=5178
+    volumes:
+      - ./data:/app/data        # 持久化配置 / 上传 / 索引（含 API Key，请勿提交）
+    restart: unless-stopped
+
+  # 可选：本地 Mock 模型服务，返回确定性的 embedding / 聊天，用于无 Key 体验
+  mock:
+    image: node:18-alpine
+    working_dir: /app
+    command: ["node", "tools/mock-server.js"]
+    volumes:
+      - ./tools:/app/tools:ro
+    ports:
+      - "5199:5199"
+    profiles: ["mock"]

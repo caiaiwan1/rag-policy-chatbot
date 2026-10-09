@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "node tools/smoke-test.js"
   },
   "engines": { "node": ">=18" },
   "dependencies": {
