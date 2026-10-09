@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>RAG 配置助手 · 纯前端版</title>
+<title>RAG 工作台 · 多会话纯前端版</title>
 <style>
   :root{
     --bg:#0f1117; --panel:#171a23; --panel2:#1f2330; --line:#2a2f3d;
@@ -19,7 +19,7 @@
   }
   header{
     display:flex; align-items:center; gap:10px; padding:10px 16px;
-    background:var(--panel); border-bottom:1px solid var(--line);
+    background:var(--panel); border-bottom:1px solid var(--line); z-index:28;
   }
   header .logo{font-weight:700; font-size:16px; letter-spacing:.3px}
   header .logo small{color:var(--sub); font-weight:400; font-size:12px; margin-left:6px}
@@ -31,10 +31,14 @@
   .btn:hover{border-color:var(--accent)}
   .btn.primary{background:var(--accent2); border-color:var(--accent2); color:#fff}
   .btn.primary:hover{background:var(--accent)}
+  .btn-mini{padding:3px 8px; font-size:11px; border-radius:7px; background:var(--panel); border:1px solid var(--line); color:var(--txt); cursor:pointer}
+  .btn-mini:hover{border-color:var(--accent)}
+  .btn-mini.danger:hover{border-color:var(--err); color:var(--err)}
   .pill{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
     background:var(--panel2); border:1px solid var(--line); font-size:12px; color:var(--sub)}
   .pill.on{color:var(--ok); border-color:var(--ok)}
-  main{flex:1; display:flex; flex-direction:column; min-height:0}
+  main{flex:1; display:flex; flex-direction:column; min-height:0; margin-left:0; transition:.2s}
+  main.shifted{margin-left:260px}
   #messages{flex:1; overflow:auto; padding:18px 16px; max-width:880px; width:100%; margin:0 auto}
   .msg{margin:14px 0; display:flex}
   .msg .av{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--panel2);margin-right:10px}
@@ -54,7 +58,7 @@
   textarea#input:focus{border-color:var(--accent)}
   .hint{color:var(--sub); font-size:11px; text-align:center; margin-top:6px; max-width:880px; margin-left:auto; margin-right:auto}
   /* 抽屉 */
-  .drawer{position:fixed; top:0; right:0; height:100%; width:420px; max-width:92vw; background:var(--panel);
+  .drawer{position:fixed; top:0; right:0; height:100%; width:440px; max-width:94vw; background:var(--panel);
     border-left:1px solid var(--line); transform:translateX(100%); transition:.22s ease; z-index:30; display:flex; flex-direction:column}
   .drawer.open{transform:translateX(0)}
   .drawer .dh{display:flex; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); font-weight:600}
@@ -84,25 +88,66 @@
   .overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:20; display:none}
   .overlay.show{display:block}
   .toast{position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel2);
-    border:1px solid var(--line); padding:10px 16px; border-radius:10px; z-index:50; font-size:13px; opacity:0; transition:.2s}
+    border:1px solid var(--line); padding:10px 16px; border-radius:10px; z-index:50; font-size:13px; opacity:0; transition:.2s; max-width:80vw}
   .toast.show{opacity:1}
   .small{font-size:11px; color:var(--sub)}
   .tag{display:inline-block; padding:1px 7px; border-radius:6px; background:var(--panel2); border:1px solid var(--line); font-size:11px; color:var(--sub); margin-left:6px}
   code{background:var(--panel2); padding:1px 5px; border-radius:5px; font-size:12px}
   a{color:var(--accent)}
   kbd{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px}
+  /* 侧边栏（会话列表） */
+  .sidebar{position:fixed; top:0; left:0; height:100%; width:260px; background:var(--panel); border-right:1px solid var(--line);
+    transform:translateX(0); transition:.2s; z-index:26; display:flex; flex-direction:column}
+  .sidebar.hide{transform:translateX(-100%)}
+  .sidebar .sh{padding:13px 14px; border-bottom:1px solid var(--line); font-weight:600; display:flex; align-items:center; gap:8px}
+  .sidebar .sh .x{margin-left:auto; cursor:pointer; color:var(--sub)}
+  .slist{flex:1; overflow:auto; padding:10px}
+  .scard{padding:10px 12px; border:1px solid var(--line); border-radius:10px; margin:8px 0; cursor:pointer; background:var(--panel2)}
+  .scard.active{border-color:var(--accent); background:#1b2336}
+  .scard .nm{font-weight:600; font-size:13px; display:flex; align-items:center}
+  .scard .nm input{border:none; background:transparent; color:var(--txt); font:inherit; font-weight:600; width:100%; outline:none}
+  .scard .meta{font-size:11px; color:var(--sub); margin-top:4px}
+  .scard .acts{display:flex; gap:6px; margin-top:8px}
+  /* 测评 */
+  .tabs{display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap}
+  .tab{padding:6px 11px; border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:12px; background:var(--panel2)}
+  .tab.active{border-color:var(--accent); color:var(--accent)}
+  .tabpane{display:none}.tabpane.active{display:block}
+  .testitem{border:1px solid var(--line); border-radius:9px; padding:8px 10px; margin:7px 0; background:var(--panel2)}
+  .testitem .q{font-weight:600; font-size:13px}
+  .testitem .r{font-size:12px; color:var(--sub); margin-top:3px}
+  table.eval{width:100%; border-collapse:collapse; font-size:12px; margin-top:8px}
+  table.eval th,table.eval td{border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top}
+  table.eval th{background:var(--panel2); color:var(--sub); position:sticky; top:0}
+  .metriccard{display:inline-block; min-width:118px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; margin:6px 6px 6px 0; background:var(--panel2)}
+  .metriccard .v{font-size:22px; font-weight:700}
+  .metriccard .k{font-size:11px; color:var(--sub); margin-top:2px}
+  .scorebar{height:7px; border-radius:5px; background:var(--panel); overflow:hidden; margin-top:4px}
+  .scorebar>i{display:block; height:100%; background:var(--accent)}
+  .grow{display:flex; gap:8px; align-items:center}
 </style>
 </head>
 <body>
 <header>
-  <div class="logo">RAG 配置助手 <small>纯前端 · 打开即用</small></div>
+  <button class="btn" id="btnSidebar">☰ 会话</button>
+  <div class="logo">RAG 工作台 <small>多会话 · 纯前端 · 打开即用</small></div>
   <div class="spacer"></div>
   <span class="pill" id="demoPill">演示模式：关</span>
+  <button class="btn" id="btnEval">📊 测评</button>
   <button class="btn" id="btnDocs">📄 文档</button>
   <button class="btn" id="btnCfg">⚙ 配置</button>
 </header>
 
-<main>
+<!-- 会话侧边栏 -->
+<div class="sidebar" id="sidebar">
+  <div class="sh">💬 我的 RAG 会话 <span class="x" id="btnSidebarClose">✕</span></div>
+  <div class="slist" id="slist"></div>
+  <div style="padding:12px; border-top:1px solid var(--line)">
+    <button class="btn primary" id="btnNewSession" style="width:100%">＋ 新建 RAG 会话</button>
+  </div>
+</div>
+
+<main id="main">
   <div id="messages"></div>
   <div class="inputbar">
     <div class="inputwrap">
@@ -116,7 +161,7 @@
 <!-- 配置抽屉 -->
 <div class="overlay" id="overlay"></div>
 <div class="drawer" id="cfgDrawer">
-  <div class="dh">⚙ 配置 <span class="x" data-close="cfgDrawer">✕</span></div>
+  <div class="dh">⚙ 配置（当前会话）<span class="x" data-close="cfgDrawer">✕</span></div>
   <div class="db">
     <div class="field">
       <label>快速预设（自动填地址，再填 Key 即可）</label>
@@ -219,25 +264,76 @@
         <label class="chk"><input type="checkbox" data-cfg="rerank.enable"> 启用结果重排（使用上方 Rerank 模型，未配置则大模型打分）</label>
         <div class="field"><label>重排后进入上下文的数量</label><input type="number" data-cfg="rerank.topN" placeholder="5"></div>
         <label class="chk"><input type="checkbox" data-cfg="gen.allowFallback"> 检索不足时仍让模型自由回答</label>
+        <label class="chk"><input type="checkbox" data-cfg="demo"> 演示模式（无需 Key，本地伪向量演示流程）</label>
       </div>
     </div>
 
     <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn primary" id="btnSaveCfg" style="flex:1">保存配置</button>
-      <button class="btn" id="btnClearData">清空全部</button>
+      <button class="btn" id="btnExport">导出会话</button>
     </div>
-    <div class="small" style="margin-top:8px">配置保存在你自己的浏览器（localStorage），不会上传到任何服务器。演示模式下无需 Key 即可体验完整流程。</div>
+    <div class="small" style="margin-top:8px">配置保存在你自己的浏览器（localStorage），跟每个会话绑定，不会上传到任何服务器。演示模式下无需 Key 即可体验完整流程。</div>
   </div>
 </div>
 
 <!-- 文档抽屉 -->
 <div class="drawer" id="docDrawer">
-  <div class="dh">📄 文档与切片 <span class="x" data-close="docDrawer">✕</span></div>
+  <div class="dh">📄 文档与切片（当前会话）<span class="x" data-close="docDrawer">✕</span></div>
   <div class="db">
-    <div class="drop" id="drop">点击或拖拽上传<br><span class="small">支持 .txt .md .csv .json .html .pdf .docx</span></div>
+    <div class="drop" id="drop">点击或拖拽上传<br><span class="small">支持 .txt .md .csv .json .html .pdf .docx（可多选）</span></div>
     <input type="file" id="fileInput" multiple accept=".txt,.md,.csv,.json,.html,.pdf,.docx" style="display:none">
+    <div class="grow" style="margin-bottom:10px">
+      <button class="btn" id="btnRebuild" style="flex:1">重建索引（改配置后点此）</button>
+    </div>
     <div id="docList"></div>
     <div id="chunkStat" class="small" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- 测评抽屉 -->
+<div class="drawer" id="evalDrawer">
+  <div class="dh">📊 评测（当前会话）<span class="x" data-close="evalDrawer">✕</span></div>
+  <div class="db">
+    <div class="tabs">
+      <div class="tab active" data-tab="tabSet">① 测试集</div>
+      <div class="tab" data-tab="tabGen">② 自动生成</div>
+      <div class="tab" data-tab="tabRun">③ 运行与结果</div>
+    </div>
+
+    <div class="tabpane active" id="tabSet">
+      <div class="small">手工准备测试集：每行一条，粘贴 JSON 数组 <code>[{ "question":"…","reference":"…" }]</code>，或上传 .json/.csv（含 question、reference 两列）。</div>
+      <div class="field" style="margin-top:10px"><label>粘贴测试集 JSON</label>
+        <textarea id="testJson" style="min-height:110px" placeholder='[{"question":"什么是深度学习？","reference":"深度学习是机器学习的子集"}]'></textarea>
+      </div>
+      <div class="grow">
+        <button class="btn" id="btnLoadTest" style="flex:1">解析并载入</button>
+        <button class="btn btn-mini" id="btnUploadTest">上传文件</button>
+        <input type="file" id="testFile" accept=".json,.csv" style="display:none">
+        <button class="btn btn-mini" id="btnExportTest">导出</button>
+      </div>
+      <div id="testList" style="margin-top:10px"></div>
+    </div>
+
+    <div class="tabpane" id="tabGen">
+      <div class="small">让大模型根据本会话已上传文档自动生成问答对测试集（基于随机采样片段）。需关闭演示模式并已配置大模型 Key。</div>
+      <div class="row" style="margin-top:10px">
+        <div class="field"><label>生成数量</label><input type="number" id="genCount" value="8"></div>
+        <div class="field"><label>每个问题采样段落数</label><input type="number" id="genSample" value="4"></div>
+      </div>
+      <div class="field"><label>生成提示词（可选）</label>
+        <textarea id="genPrompt" placeholder="基于资料生成覆盖了不同主题、可检索到答案的问答对。问题要自然多样，参考答案要准确简洁。"></textarea>
+      </div>
+      <button class="btn primary" id="btnGen" style="width:100%">用大模型生成测试集</button>
+      <div id="genStatus" class="small" style="margin-top:10px"></div>
+    </div>
+
+    <div class="tabpane" id="tabRun">
+      <div class="small">对测试集中每个问题实跑：改写→检索→重排→回答，再从「检索召回 / 忠实度 / 正确性 / 相关性」四维度打分（演示模式用 token 重叠启发式，真实模式叠加大模型裁判）。</div>
+      <button class="btn primary" id="btnRunEval" style="width:100%;margin:10px 0">运行测评</button>
+      <div id="evalStatus" class="small"></div>
+      <div id="evalSummary"></div>
+      <div id="evalTable" style="max-height:46vh; overflow:auto"></div>
+    </div>
   </div>
 </div>
 
@@ -277,19 +373,57 @@ const PRESETS = {
 /* ============ 工具 ============ */
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
-function loadCfg(){
-  let c; try{c=JSON.parse(localStorage.getItem("rag_cfg")||"null")}catch(e){}
-  return deepMerge(structuredClone(DEFAULTS), c||{});
-}
-function saveCfg(c){ localStorage.setItem("rag_cfg", JSON.stringify(c)); }
 function deepMerge(a,b){ if(!(b&&typeof b==="object")) return b===undefined?a:b;
   const o=Array.isArray(a)?[...a]:{...a};
   for(const k in b){ o[k]= (a[k]&&typeof a[k]==="object"&&!Array.isArray(a[k])) ? deepMerge(a[k],b[k]) : b[k]; }
   return o;
 }
-function toast(msg,ms=1800){ const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+function uid(){ return "s"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function toast(msg,ms=2000){ const t=$("#toast"); t.textContent=msg; t.classList.add("show");
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),ms); }
 function esc(s){ return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function fmt(n){ return (n==null||isNaN(n))?"—":(Math.round(n*100)/100).toFixed(2); }
+
+/* ============ 会话状态（localStorage） ============ */
+const LS_KEY = "rag_studio_sessions_v1";
+function loadState(){
+  let s; try{ s=JSON.parse(localStorage.getItem(LS_KEY)||"null"); }catch(e){ s=null; }
+  if(!s || !Array.isArray(s.sessions) || !s.sessions.length){
+    const first=newSessionObj("我的第一个 RAG");
+    return { sessions:[first], activeId:first.id };
+  }
+  return s;
+}
+function newSessionObj(name){
+  return { id:uid(), name, createdAt:Date.now(),
+    config:deepMerge(structuredClone(DEFAULTS),{}),
+    docs:[], vectors:[], chat:[], testSet:[], evalResults:null };
+}
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }
+  catch(e){ toast("保存失败（可能是向量过大超出浏览器存储限制），可删除部分文档或会话"); }
+}
+let STATE = loadState();
+let S = STATE.sessions.find(x=>x.id===STATE.activeId) || STATE.sessions[0];
+let cfg = S.config;               // 当前活动会话配置（引用）
+const KB = { docs:[], chunks:[], vectors:[], bm25:null, built:false };
+let currentQueryVec = null;
+
+function syncKBFromSession(){
+  KB.docs = S.docs;
+  KB.chunks = S.docs.flatMap(d=>d.chunks);
+  if(Array.isArray(S.vectors) && S.vectors.length===KB.chunks.length){ KB.vectors=S.vectors; KB.built=KB.chunks.length>0; }
+  else { KB.vectors=[]; KB.built=false; }
+  KB.bm25 = (cfg.retrieve.mode==="hybrid" && KB.built) ? new BM25(KB.chunks) : null;
+  updateChunkStat();
+}
+function switchSession(id){
+  const ns = STATE.sessions.find(x=>x.id===id); if(!ns) return;
+  STATE.activeId=id; S=ns; cfg=S.config;
+  renderCfg(); syncKBFromSession(); renderDocs(); renderMessages(); renderTestList(); renderEvalResults();
+  $("#main").classList.add("shifted"); $("#sidebar").classList.remove("hide");
+  renderSessions(); save();
+}
 
 /* ============ 文本 / 分词 ============ */
 function countTokens(s){
@@ -303,7 +437,6 @@ function grams(text){
   for(let i=0;i<t.length;i++){ out.push(t[i]); if(i+1<t.length) out.push(t[i]+t[i+1]); }
   return out;
 }
-/* 字符级滑窗（中文 token≈字符，足够简便） */
 function sliceByChars(text,size,overlap){
   const step=Math.max(1,size-overlap); const out=[];
   for(let i=0;i<text.length;i+=step){ out.push(text.slice(i,i+size)); if(i+size>=text.length) break; }
@@ -327,10 +460,9 @@ async function chunkText(text, cfg, embedFn){
       else { if(buf) out.push(buf); buf=p; }
     }
     if(buf) out.push(buf);
-    // 段落重叠
     if(ov>0 && out.length>1){
       const step=Math.max(1,size-ov);
-      return out.flatMap(b=>sliceByChars(b,size,ov).map((c,i)=>i===0?c:c));
+      return out.flatMap(b=>sliceByChars(b,size,ov));
     }
     return out.length?out:[text];
   }
@@ -349,7 +481,6 @@ async function chunkText(text, cfg, embedFn){
     if(cur.length) groups.push(cur.join(""));
     return groups.length?groups:[text];
   }
-  // fixed
   return sliceByChars(text,size,ov);
 }
 
@@ -366,8 +497,6 @@ function pseudoEmbed(text,dim){
   const norm=Math.sqrt(v.reduce((a,b)=>a+b*b,0))||1;
   return v.map(x=>x/norm);
 }
-
-/* BM25（中文 bigram） */
 class BM25{
   constructor(docs){ this.docs=docs.map(d=>grams(d)); this.df={}; this.N=this.docs.length;
     for(const d of this.docs) for(const t of new Set(d)) this.df[t]=(this.df[t]||0)+1;
@@ -419,18 +548,15 @@ async function rerankAPI(query,docs,cfg){
   });
   if(!res.ok) throw new Error("Rerank 调用失败："+res.status);
   const j=await res.json();
-  // 兼容两种返回
   if(Array.isArray(j.results)) return j.results.map(r=>({index:r.index,score:r.relevance_score}));
   if(Array.isArray(j.data)) return j.data.map((r,i)=>({index:r.index??i,score:r.relevance_score??r.score}));
   throw new Error("Rerank 返回格式不支持");
 }
 
-/* ============ 知识库（内存） ============ */
-const KB = { docs:[], chunks:[], vectors:[], bm25:null, built:false };
+/* ============ 索引 / 检索 ============ */
 async function indexDocs(cfg){
-  const texts=KB.chunks;
-  KB.vectors=await embedTexts(texts,cfg);
-  if(cfg.retrieve.mode==="hybrid") KB.bm25=new BM25(texts);
+  KB.vectors=await embedTexts(KB.chunks,cfg);
+  if(cfg.retrieve.mode==="hybrid") KB.bm25=new BM25(KB.chunks);
   KB.built=true;
 }
 function search(query,cfg){
@@ -449,7 +575,7 @@ function search(query,cfg){
       const semRank={}, bmRank={};
       [...semScores.keys()].sort((a,b)=>semScores[b]-semScores[a]).forEach((idx,r)=>semRank[idx]=r+1);
       [...bm.keys()].sort((a,b)=>bm[b]-bm[a]).forEach((idx,r)=>bmRank[idx]=r+1);
-      const MAXF=2/(K+1); // 双来源均排第一时的理论上限，用于把 RRF 归一到 0..1
+      const MAXF=2/(K+1);
       cand=pairs.map(p=>({i:p.i,cos:p.cos,sem:p.sem,bm:p.bm,
         fused:(1/(K+(semRank[p.i]||1e9))+1/(K+(bmRank[p.i]||1e9)))/MAXF}));
     }
@@ -486,7 +612,6 @@ async function rerank(query,items,cfg){
       const map=new Map(res.map(r=>[r.index,r.score]));
       return items.map(it=>({...it,score:map.get(it.i)??it.fused})).sort((a,b)=>b.score-a.score);
     }
-    // 大模型兜底打分
     const scored=[];
     for(const it of items){
       const r=await llmChat([{role:"system",content:"判断片段与问题的相关性，只输出 0 到 1 的小数，如 0.82。"},
@@ -497,10 +622,28 @@ async function rerank(query,items,cfg){
   }catch(e){ toast("重排失败，使用融合分："+e.message); return items; }
 }
 
-/* ============ UI 状态 ============ */
-let cfg = loadCfg();
-let currentQueryVec = null;
+/* ============ 检索 + 回答（对话与测评共用） ============ */
+async function retrieveAndAnswer(q){
+  const qs=await rewriteQuery(q,cfg);
+  currentQueryVec=(await embedTexts([qs[0]],cfg))[0];
+  let cand=search(qs[0],cfg);
+  cand=await rerank(qs[0],cand,cfg);
+  const topK=+cfg.retrieve.topK||5;
+  const top=cand.slice(0,topK);
+  const minS=+cfg.retrieve.minScore||0;
+  const best=top[0] ? (top[0].score ?? top[0].cos) : 0;
+  if(minS>0 && best<minS){
+    return { refused:true, best, query:qs[0] };
+  }
+  const ctx=top.map(it=>KB.chunks[it.i]);
+  const answer=await llmChat([
+    {role:"system",content:"你是企业知识库助手。只依据【资料】回答，不要编造。若资料不足，明确说明。用中文简洁回答，并标注引用编号。"},
+    {role:"user",content:`【资料】\n${ctx.map((c,i)=>`[${i+1}] ${c}`).join("\n\n")}\n\n【问题】${q}`}
+  ],cfg);
+  return { answer, contexts:ctx, refs:top.map(it=>KB.chunks[it.i]), query:qs[0] };
+}
 
+/* ============ 配置 UI ============ */
 function renderCfg(){
   $$("[data-cfg]").forEach(el=>{
     const path=el.dataset.cfg.split(".");
@@ -535,26 +678,29 @@ function updateDemoPill(){
 function openDrawer(id){ $("#"+id).classList.add("open"); $("#overlay").classList.add("show"); }
 function closeDrawer(id){ $("#"+id).classList.remove("open"); $("#overlay").classList.remove("show"); }
 
-/* 消息 */
-function addMsg(role,html,refs){
-  const m=document.createElement("div");
-  m.className="msg "+(role==="me"?"me":"");
-  const av=document.createElement("div"); av.className="av"; av.textContent= role==="me"?"你":"AI";
-  const b=document.createElement("div"); b.className="bubble"; b.innerHTML=html;
-  m.appendChild(av); m.appendChild(b);
-  if(refs&&refs.length){ const r=document.createElement("div"); r.className="refs";
-    r.innerHTML="<div>📎 引用：</div>"+refs.map((t,i)=>`<div class="ref">[${i+1}] ${esc(t.slice(0,300))}${t.length>300?"…":""}</div>`).join("");
-    b.appendChild(r); }
-  $("#messages").appendChild(m);
-  $("#messages").scrollTop=$("#messages").scrollHeight;
+/* ============ 消息渲染 ============ */
+function pushMsg(item){ S.chat.push(item); renderMessages(); save(); }
+function renderMessages(){
+  const box=$("#messages"); box.innerHTML="";
+  for(const it of S.chat){
+    if(it.role==="sys"){ const d=document.createElement("div"); d.className="sys"; d.textContent=it.content; box.appendChild(d); continue; }
+    const m=document.createElement("div"); m.className="msg "+(it.role==="me"?"me":"");
+    const av=document.createElement("div"); av.className="av"; av.textContent= it.role==="me"?"你":"AI";
+    const b=document.createElement("div"); b.className="bubble"; b.innerHTML=it.content;
+    m.appendChild(av); m.appendChild(b);
+    if(it.refs&&it.refs.length){ const r=document.createElement("div"); r.className="refs";
+      r.innerHTML="<div>📎 引用：</div>"+it.refs.map((t,i)=>`<div class="ref">[${i+1}] ${esc(t.slice(0,300))}${t.length>300?"…":""}</div>`).join("");
+      b.appendChild(r); }
+    box.appendChild(m);
+  }
+  box.scrollTop=box.scrollHeight;
 }
+function addSys(t){ pushMsg({role:"sys",content:t}); }
 
 /* 文档解析 */
 async function parseFile(file){
   const name=file.name.toLowerCase();
-  if(/\.(txt|md|csv|json|html?)$/.test(name)){
-    return await file.text();
-  }
+  if(/\.(txt|md|csv|json|html?)$/.test(name)){ return await file.text(); }
   if(name.endsWith(".pdf")){
     if(!window.pdfjsLib) throw new Error("PDF 解析库未加载（检查网络/CDN），请改用 txt/md");
     const buf=await file.arrayBuffer();
@@ -573,128 +719,268 @@ async function parseFile(file){
   throw new Error("不支持的文件类型："+file.name);
 }
 
+/* ============ 会话侧边栏 ============ */
+function renderSessions(){
+  const list=$("#slist"); list.innerHTML="";
+  STATE.sessions.forEach(s=>{
+    const el=document.createElement("div"); el.className="scard"+(s.id===STATE.activeId?" active":"");
+    const docN=s.docs.length, chunkN=s.docs.reduce((a,d)=>a+d.chunks.length,0);
+    el.innerHTML=`
+      <div class="nm"><input value="${esc(s.name)}" data-rename="${s.id}"></div>
+      <div class="meta">${docN} 文档 · ${chunkN} 切片 · ${s.chat.filter(c=>c.role!=='sys').length} 轮对话</div>
+      <div class="acts">
+        <button class="btn-mini" data-switch="${s.id}">打开</button>
+        <button class="btn-mini danger" data-del="${s.id}">删除</button>
+      </div>`;
+    list.appendChild(el);
+  });
+  $$("[data-switch]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); switchSession(b.dataset.switch); });
+  $$("[data-del]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); delSession(b.dataset.del); });
+  $$("[data-rename]").forEach(inp=>inp.onchange=e=>{ const s=STATE.sessions.find(x=>x.id===e.target.dataset.rename); if(s){ s.name=e.target.value.trim()||s.name; save(); renderSessions(); } });
+}
+function newSession(){
+  const s=newSessionObj("RAG 会话 "+(STATE.sessions.length+1));
+  STATE.sessions.push(s); STATE.activeId=s.id; S=s; cfg=s.config;
+  renderCfg(); syncKBFromSession(); renderDocs(); renderMessages(); renderSessions();
+  pushMsg({role:"sys",content:"已新建会话「"+s.name+"」。上传文档或开启演示模式后即可问答。"});
+  $("#main").classList.add("shifted"); $("#sidebar").classList.remove("hide");
+}
+function delSession(id){
+  if(STATE.sessions.length<=1){ toast("至少保留一个会话"); return; }
+  if(!confirm("确定删除该会话及其文档、对话、测评？")) return;
+  STATE.sessions=STATE.sessions.filter(x=>x.id!==id);
+  if(STATE.activeId===id){ STATE.activeId=STATE.sessions[0].id; S=STATE.sessions[0]; cfg=S.config; }
+  renderCfg(); syncKBFromSession(); renderDocs(); renderMessages(); renderSessions(); save();
+}
+
+/* ============ 文档管理 ============ */
+async function handleFiles(files){
+  if(S.docs.length===0 && KB.chunks.length===0){ /* 首次 */ }
+  for(const f of files){
+    try{
+      addSys(`解析 ${f.name} …`);
+      const text=await parseFile(f);
+      const chunks=await chunkText(text,cfg, async(sents)=>embedTexts(sents,cfg));
+      S.docs.push({name:f.name,text,chunks});
+      addSys(`✓ ${f.name}：切成 ${chunks.length} 块`);
+    }catch(err){ addSys(`✗ ${f.name} 失败：${err.message}`); }
+  }
+  KB.docs=S.docs; KB.chunks=S.docs.flatMap(d=>d.chunks);
+  renderDocs(); await rebuildIndex();
+}
+async function rebuildIndex(){
+  if(KB.chunks.length===0){ KB.built=false; S.vectors=[]; save(); updateChunkStat(); return; }
+  addSys("正在向量化并建索引 …");
+  try{ await indexDocs(cfg); S.vectors=KB.vectors; save(); addSys(`✓ 索引完成：${KB.chunks.length} 个切片`); }
+  catch(e){ addSys("✗ 索引失败："+e.message); }
+  updateChunkStat();
+}
+function updateChunkStat(){
+  $("#chunkStat").textContent = `当前共 ${S.docs.length} 个文档，${KB.chunks.length} 个切片。${KB.built?"（已建索引）":"（未建索引，点上方重建）"}`;
+}
+function renderDocs(){
+  const list=$("#docList"); list.innerHTML="";
+  S.docs.forEach((d,i)=>{
+    const el=document.createElement("div"); el.className="docitem";
+    el.innerHTML=`<div class="nm" title="${esc(d.name)}">${esc(d.name)}</div>
+      <div class="meta">${d.chunks.length} 块</div>
+      <button class="btn-mini" data-del="${i}">删除</button>`;
+    list.appendChild(el);
+  });
+  $$("#docList [data-del]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.del;
+    S.docs.splice(i,1);
+    KB.docs=S.docs; KB.chunks=S.docs.flatMap(d=>d.chunks); KB.built=false;
+    renderDocs(); rebuildIndex();
+  });
+  updateChunkStat();
+}
+
+/* ============ 发送问题 ============ */
+async function send(){
+  const ta=$("#input"); const q=ta.value.trim(); if(!q) return;
+  ta.value=""; pushMsg({role:"me",content:esc(q)});
+  if(KB.chunks.length===0){ pushMsg({role:"ai",content:"还没有上传文档。点右上角 📄 文档 上传，或先在 ⚙ 配置 开启演示模式。",refs:[]}); return; }
+  if(!KB.built){ try{ await rebuildIndex(); }catch(e){ pushMsg({role:"ai",content:"索引失败："+e.message,refs:[]}); return; } }
+  try{
+    const out=await retrieveAndAnswer(q);
+    if(out.refused){
+      pushMsg({role:"ai",content:`抱歉，根据当前知识库检索到的内容相关性不足（最高分 ${fmt(out.best)} < 阈值），无法可靠回答这个问题。\n\n你可以：换个问法、上传更多相关文档，或降低拒答阈值。`,refs:[]});
+      return;
+    }
+    pushMsg({role:"ai",content:esc(out.answer),refs:out.refs});
+  }catch(e){ pushMsg({role:"ai",content:"出错了："+e.message,refs:[]}); }
+}
+
+/* ============ 测评：打分 ============ */
+function overlapRatio(aToks,bToks){ if(!aToks.length) return 0; const set=new Set(bToks); let c=0; for(const t of aToks) if(set.has(t)) c++; return c/aToks.length; }
+function jaccard(a,b){ const A=new Set(a),B=new Set(b); if(!A.size&&!B.size) return 1; let inter=0; for(const t of A) if(B.has(t)) inter++; const uni=A.size+B.size-inter; return uni?inter/uni:0; }
+function scoreHeuristic(item,out){
+  const ctx=(out.contexts||[]).join("");
+  const ref=item.reference||"";
+  const ans=out.answer||"";
+  const aTok=grams(ans), qTok=grams(item.question), rTok=grams(ref), cTok=grams(ctx);
+  return {
+    recall: ref? overlapRatio(rTok,cTok):null,
+    faithfulness: ans? overlapRatio(aTok,cTok):0,
+    correctness: (ref&&ans)? jaccard(aTok,rTok):null,
+    relevancy: (ans&&item.question)? jaccard(aTok,qTok):0
+  };
+}
+async function judgeItem(item,out,cfg){
+  try{
+    const r=await llmChat([{role:"system",content:'你是严格的评测裁判。根据【问题】【参考答案】【检索到的资料】【模型回答】，对模型回答从四个维度打分（0-1，保留两位小数）：\n1. recall 检索召回：资料是否包含回答问题所需的关键信息；\n2. faithfulness 忠实度：回答是否完全基于资料、无编造；\n3. correctness 正确性：回答与参考答案的语义一致程度；\n4. relevancy 相关性：回答是否切题、回应了问题。\n只输出 JSON，如 {"recall":0.8,"faithfulness":0.9,"correctness":0.7,"relevancy":0.85}'},
+      {role:"user",content:`【问题】${item.question}\n【参考答案】${item.reference||"(无)"}\n【检索资料】${(out.contexts||[]).join("\n---\n").slice(0,1500)}\n【模型回答】${out.answer||""}`}],cfg);
+    const m=r.match(/\{[\s\S]*\}/); if(!m) throw 0;
+    const o=JSON.parse(m[0]);
+    const f=x=>{x=+x; return isNaN(x)?0:Math.max(0,Math.min(1,x));};
+    return {recall:f(o.recall),faithfulness:f(o.faithfulness),correctness:item.reference?f(o.correctness):null,relevancy:f(o.relevancy)};
+  }catch(e){ return null; }
+}
+function avgMetric(items,key){
+  const vals=items.map(i=>i.scores[key]).filter(v=>v!=null);
+  if(!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+async function runEval(){
+  if(S.testSet.length===0){ toast("请先在「① 测试集」准备用例"); switchTab("tabSet"); return; }
+  if(KB.chunks.length===0){ toast("请先上传文档并建索引"); return; }
+  if(!KB.built){ try{ await rebuildIndex(); }catch(e){ toast("索引失败："+e.message); return; } }
+  const status=$("#evalStatus"); status.textContent="测评进行中…（0/"+S.testSet.length+"）";
+  const results=[];
+  for(let idx=0; idx<S.testSet.length; idx++){
+    const item=S.testSet[idx];
+    status.textContent=`测评进行中…（${idx+1}/${S.testSet.length}）「${item.question.slice(0,16)}」`;
+    try{
+      const out=await retrieveAndAnswer(item.question);
+      let scores;
+      if(cfg.demo){ scores=scoreHeuristic(item,out); }
+      else { scores= await judgeItem(item,out,cfg) || scoreHeuristic(item,out); }
+      results.push({...item, answer:out.answer||(out.refused?"（检索不足，已拒答）":""), refused:!!out.refused, contexts:(out.contexts||[]), scores});
+    }catch(e){ results.push({...item, answer:"(运行出错："+e.message+")", scores:{recall:0,faithfulness:0,correctness:null,relevancy:0}}); }
+  }
+  const overall={ recall:avgMetric(results,"recall"), faithfulness:avgMetric(results,"faithfulness"),
+    correctness:avgMetric(results,"correctness"), relevancy:avgMetric(results,"relevancy") };
+  S.evalResults={ items:results, overall, ranAt:Date.now() };
+  save(); renderEvalResults();
+  status.textContent="测评完成 ✓ 共 "+results.length+" 条";
+}
+
+/* 测评 UI */
+function switchTab(id){ $$(".tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===id));
+  $$(".tabpane").forEach(p=>p.classList.toggle("active",p.id===id)); }
+function renderTestList(){
+  const box=$("#testList");
+  if(!S.testSet.length){ box.innerHTML='<div class="small">暂无测试集，粘贴 JSON 或上传文件后点「解析并载入」。</div>'; return; }
+  box.innerHTML="";
+  S.testSet.forEach((t,i)=>{
+    const el=document.createElement("div"); el.className="testitem";
+    el.innerHTML=`<div class="grow"><div class="q">${i+1}. ${esc(t.question)}</div>
+      <button class="btn-mini danger" data-tdel="${i}">删</button></div>
+      <div class="r">参考答案：${esc(t.reference||"（无，仅测检索/相关性）")}</div>`;
+    box.appendChild(el);
+  });
+  $$("[data-tdel]").forEach(b=>b.onclick=()=>{ S.testSet.splice(+b.dataset.tdel,1); save(); renderTestList(); });
+}
+function loadTestFromText(text){
+  let arr;
+  try{ arr=JSON.parse(text); }catch(e){ toast("JSON 解析失败："+e.message); return; }
+  if(!Array.isArray(arr)){ toast("测试集需是 JSON 数组"); return; }
+  const items=arr.map(x=>({question:String(x.question||"").trim(),reference:String(x.reference||"").trim()})).filter(x=>x.question);
+  if(!items.length){ toast("未发现有效 question 字段"); return; }
+  S.testSet=items; save(); renderTestList();
+  toast("已载入 "+items.length+" 条测试");
+}
+async function genTestSet(){
+  if(cfg.demo){ toast("自动生成需关闭演示模式并配置大模型"); return; }
+  if(KB.chunks.length===0){ toast("请先上传文档"); return; }
+  const n=Math.max(1,+($("#genCount").value)||8);
+  const sample=Math.max(1,+($("#genSample").value)||4);
+  const all=KB.chunks.slice();
+  // 随机采样
+  const picks=[]; const pool=[...all];
+  for(let i=0;i<n*sample && pool.length;i++){ picks.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]); }
+  const material=picks.join("\n---\n").slice(0,6000);
+  const base=$("#genPrompt").value.trim() || "基于资料生成覆盖不同主题、且能在资料中找到答案的问答对。问题要自然多样，参考答案要准确简洁。";
+  $("#genStatus").textContent="正在生成…";
+  try{
+    const r=await llmChat([{role:"system",content:base+" 只输出 JSON 数组，元素格式：{\"question\":\"..\",\"reference\":\"..\"}，不要任何解释。"},
+      {role:"user",content:"【资料】\n"+material}],cfg);
+    const m=r.match(/\[[\s\S]*\]/); if(!m) throw new Error("未返回数组");
+    loadTestFromText(m[0]);
+    $("#genStatus").textContent="✓ 已生成并载入 "+S.testSet.length+" 条";
+  }catch(e){ $("#genStatus").textContent="✗ 生成失败："+e.message; }
+}
+function renderEvalResults(){
+  const sum=$("#evalSummary"), tbl=$("#evalTable");
+  const er=S.evalResults;
+  if(!er){ sum.innerHTML='<div class="small">尚未运行测评。准备好测试集后点「运行测评」。</div>'; tbl.innerHTML=""; return; }
+  const ov=er.overall;
+  const cards=[
+    ["检索召回","recall"],["忠实度","faithfulness"],["正确性","correctness"],["相关性","relevancy"]
+  ].map(([k,key])=>`<div class="metriccard"><div class="v">${fmt(ov[key])}</div><div class="k">${k}</div></div>`).join("");
+  sum.innerHTML='<div style="margin:6px 0 4px">综合评分（${er.items.length} 条）</div>'+cards;
+  let rows="";
+  er.items.forEach((it,i)=>{
+    const sc=it.scores;
+    const mini=[["召回",sc.recall],["忠实",sc.faithfulness],["正确",sc.correctness],["相关",sc.relevancy]]
+      .map(([k,v])=>`${k} ${fmt(v)}`).join(" · ");
+    rows+=`<tr><td>${i+1}</td><td>${esc(it.question.slice(0,40))}</td>
+      <td>${esc((it.answer||"").slice(0,80))}${it.refused?' <span class="tag">拒答</span>':""}</td>
+      <td style="white-space:nowrap">${mini}</td>
+      <td>${esc((it.contexts||[]).join(" ").slice(0,80))}</td></tr>`;
+  });
+  tbl.innerHTML=`<table class="eval"><thead><tr><th>#</th><th>问题</th><th>模型回答</th><th>四维度(0-1)</th><th>检索到的资料</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 /* ============ 事件绑定 ============ */
+$("#btnSidebar").onclick=()=>{ $("#sidebar").classList.toggle("hide"); $("#main").classList.toggle("shifted"); };
+$("#btnSidebarClose").onclick=()=>{ $("#sidebar").classList.add("hide"); $("#main").classList.remove("shifted"); };
+$("#btnNewSession").onclick=newSession;
 $("#btnCfg").onclick=()=>openDrawer("cfgDrawer");
 $("#btnDocs").onclick=()=>openDrawer("docDrawer");
-$("#overlay").onclick=()=>{ closeDrawer("cfgDrawer"); closeDrawer("docDrawer"); };
+$("#btnEval").onclick=()=>{ renderTestList(); renderEvalResults(); openDrawer("evalDrawer"); };
+$("#overlay").onclick=()=>{ closeDrawer("cfgDrawer"); closeDrawer("docDrawer"); closeDrawer("evalDrawer"); };
 $$("[data-close]").forEach(x=>x.onclick=()=>closeDrawer(x.dataset.close));
-
 $$(".sec>h3").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+$$(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
 
-$("#preset").onchange=(e)=>{
-  const p=PRESETS[e.target.value]; if(!p) return;
+$("#preset").onchange=(e)=>{ const p=PRESETS[e.target.value]; if(!p) return;
   for(const k in p){ for(const f in p[k]){ const el=$(`[data-cfg="${k}.${f}"]`); if(el) el.value=p[k][f]; } }
-  toast("已填入 "+e.target.value+" 预设，记得填 Key");
-};
-
-$("#chunk\\.strategy") && ($("#chunk\\.strategy").onchange=e=>{ $("#semField").style.display=e.target.value==="semantic"?"block":"none"; });
-// 上面选择器可能失效，改用通用监听
+  toast("已填入 "+e.target.value+" 预设，记得填 Key"); };
 $$('[data-cfg="chunk.strategy"]').forEach(el=>el.onchange=e=>{ $("#semField").style.display=e.target.value==="semantic"?"block":"none"; });
 
-$("#btnSaveCfg").onclick=()=>{
-  cfg=readCfg(); saveCfg(cfg); updateDemoPill();
-  // 切换演示时若已索引则需重建
-  if(KB.built){ KB.built=false; toast("配置已保存；重新上传或 rebuild 后生效"); }
-  closeDrawer("cfgDrawer"); toast("配置已保存到本地浏览器");
-};
+$("#btnSaveCfg").onclick=()=>{ readCfg(); save(); updateDemoPill(); KB.built=false; syncKBFromSession(); toast("配置已保存（与当前会话绑定）；改了切块/模型请点「重建索引」"); closeDrawer("cfgDrawer"); };
+$("#btnExport").onclick=()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=S.name+".json"; a.click(); toast("已导出当前会话 JSON"); };
 
-$("#btnClearData").onclick=()=>{
-  if(!confirm("确定清空所有配置与已上传文档？")) return;
-  localStorage.removeItem("rag_cfg");
-  KB.docs=[]; KB.chunks=[]; KB.vectors=[]; KB.bm25=null; KB.built=false;
-  cfg=loadCfg(); renderCfg(); renderDocs(); toast("已清空");
-};
-
-/* 文件上传 */
+$("#btnRebuild").onclick=()=>rebuildIndex();
 $("#drop").onclick=()=>$("#fileInput").click();
 $("#drop").ondragover=e=>{e.preventDefault(); $("#drop").style.borderColor="var(--accent)";};
 $("#drop").ondragleave=()=>{ $("#drop").style.borderColor="var(--line)"; };
 $("#drop").ondrop=e=>{ e.preventDefault(); handleFiles(e.dataTransfer.files); };
 $("#fileInput").onchange=e=>{ handleFiles(e.target.files); e.target.value=""; };
 
-async function handleFiles(files){
-  cfg=loadCfg();
-  for(const f of files){
-    try{
-      addSys(`解析 ${f.name} …`);
-      const text=await parseFile(f);
-      const chunks=await chunkText(text,cfg, async(sents)=>embedTexts(sents,cfg));
-      KB.docs.push({name:f.name,text,chunks});
-      KB.chunks.push(...chunks);
-      addSys(`✓ ${f.name}：切成 ${chunks.length} 块`);
-    }catch(err){ addSys(`✗ ${f.name} 失败：${err.message}`); }
-  }
-  renderDocs();
-  await rebuildIndex();
-}
-function addSys(t){ const d=document.createElement("div"); d.className="sys"; d.textContent=t; $("#messages").appendChild(d);
-  $("#messages").scrollTop=$("#messages").scrollHeight; }
-
-async function rebuildIndex(){
-  if(KB.chunks.length===0){ KB.built=false; updateChunkStat(); return; }
-  addSys("正在向量化并建索引 …");
-  try{ await indexDocs(cfg); addSys(`✓ 索引完成：${KB.chunks.length} 个切片`); }
-  catch(e){ addSys("✗ 索引失败："+e.message); }
-  updateChunkStat();
-}
-function updateChunkStat(){
-  $("#chunkStat").textContent = `当前共 ${KB.docs.length} 个文档，${KB.chunks.length} 个切片。${KB.built?"（已建索引）":"（未建索引）"}`;
-}
-function renderDocs(){
-  const list=$("#docList"); list.innerHTML="";
-  KB.docs.forEach((d,i)=>{
-    const el=document.createElement("div"); el.className="docitem";
-    el.innerHTML=`<div class="nm" title="${esc(d.name)}">${esc(d.name)}</div>
-      <div class="meta">${d.chunks.length} 块</div>
-      <button class="btn btn-mini" data-del="${i}">删除</button>`;
-    list.appendChild(el);
-  });
-  $$("[data-del]").forEach(b=>b.onclick=()=>{
-    const i=+b.dataset.del;
-    KB.docs.splice(i,1);
-    KB.chunks=KB.docs.flatMap(d=>d.chunks);
-    KB.built=false; renderDocs(); rebuildIndex();
-  });
-  updateChunkStat();
-}
-
-/* 发送问题 */
-async function send(){
-  const ta=$("#input"); const q=ta.value.trim(); if(!q) return;
-  ta.value=""; addMsg("me",esc(q));
-  if(KB.chunks.length===0){ addMsg("ai","还没有上传文档。点右上角 📄 文档 上传，或先在 ⚙ 配置 开启演示模式。",[]); return; }
-  if(!KB.built){ try{ await rebuildIndex(); }catch(e){ addMsg("ai","索引失败："+e.message,[]); return; } }
-
-  try{
-    const qs=await rewriteQuery(q,cfg);
-    // 用首个改写做主检索向量（多查询可融合，这里取主查询）
-    currentQueryVec=(await embedTexts([qs[0]],cfg))[0];
-    let cand=search(qs[0],cfg);
-    cand=await rerank(qs[0],cand,cfg);
-    const topK=+cfg.retrieve.topK||5;
-    const top=cand.slice(0,topK);
-    const minS=+cfg.retrieve.minScore||0;
-    const best=top[0] ? (top[0].score ?? top[0].cos) : 0;
-    if(minS>0 && best<minS){
-      addMsg("ai",`抱歉，根据当前知识库检索到的内容相关性不足（最高分 ${best.toFixed(3)} < 阈值 ${minS}），无法可靠回答这个问题。\n\n你可以：换个问法、上传更多相关文档，或降低拒答阈值。`,[]);
-      return;
-    }
-    const ctx=top.map((it,i)=>`[${i+1}] ${KB.chunks[it.i]}`).join("\n\n");
-    const answer=await llmChat([
-      {role:"system",content:"你是企业知识库助手。只依据【资料】回答，不要编造。若资料不足，明确说明。用中文简洁回答，并标注引用编号。"},
-      {role:"user",content:`【资料】\n${ctx}\n\n【问题】${q}`}
-    ],cfg);
-    addMsg("ai",esc(answer), top.map(it=>KB.chunks[it.i]));
-  }catch(e){ addMsg("ai","出错了："+e.message,[]); }
-}
 $("#btnSend").onclick=send;
 $("#input").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); } });
 
+/* 测评事件 */
+$("#btnLoadTest").onclick=()=>loadTestFromText($("#testJson").value);
+$("#btnUploadTest").onclick=()=>$("#testFile").click();
+$("#testFile").onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ if(f.name.endsWith(".csv")){
+  const lines=t.split(/\r?\n/).filter(Boolean); const head=lines[0].split(/[,，]/); const qi=head.indexOf("question"), ri=head.indexOf("reference");
+  if(qi<0){ toast("CSV 需含 question 列"); return; }
+  const items=lines.slice(1).map(l=>{ const c=l.split(/[,，]/); return {question:(c[qi]||"").trim(),reference:(ri>=0?c[ri]:"")||""}; }).filter(x=>x.question);
+  S.testSet=items; save(); renderTestList(); toast("已载入 "+items.length+" 条");
+} else { loadTestFromText(t); } }); e.target.value=""; };
+$("#btnExportTest").onclick=()=>{ const blob=new Blob([JSON.stringify(S.testSet,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="testset.json"; a.click(); };
+$("#btnGen").onclick=genTestSet;
+$("#btnRunEval").onclick=runEval;
+
 /* 初始化 */
 if(window.pdfjsLib){ try{ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"; }catch(e){} }
-renderCfg();
-renderDocs();
-addSys("欢迎使用 RAG 配置助手。右上角 ⚙ 配置 填模型 Key，📄 文档 上传资料即可问答。想零配置体验，开启演示模式即可。");
+renderCfg(); renderSessions(); syncKBFromSession(); renderDocs(); renderMessages(); renderTestList(); renderEvalResults();
+$("#sidebar").classList.remove("hide"); $("#main").classList.add("shifted");
+addSys("欢迎使用 RAG 工作台（多会话版）。左侧管理多个 RAG 会话，每个会话独立配置、文档与对话。右上角 ⚙ 配置 / 📄 文档 / 📊 测评。开启演示模式可零配置体验。");
 </script>
 </body>
 </html>
