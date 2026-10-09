@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAG 配置助手 · 纯前端版</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1f2330; --line:#2a2f3d;
+    --txt:#e6e8ef; --sub:#9aa3b2; --accent:#5b8cff; --accent2:#3a6bff;
+    --ok:#33c27f; --warn:#f0a93b; --err:#ff6b6b; --bub:#1c2030; --bubMe:#27406b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--txt);
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  }
+  header{
+    display:flex; align-items:center; gap:10px; padding:10px 16px;
+    background:var(--panel); border-bottom:1px solid var(--line);
+  }
+  header .logo{font-weight:700; font-size:16px; letter-spacing:.3px}
+  header .logo small{color:var(--sub); font-weight:400; font-size:12px; margin-left:6px}
+  header .spacer{flex:1}
+  .btn{
+    background:var(--panel2); color:var(--txt); border:1px solid var(--line);
+    padding:7px 12px; border-radius:9px; cursor:pointer; font-size:13px;
+  }
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent2); border-color:var(--accent2); color:#fff}
+  .btn.primary:hover{background:var(--accent)}
+  .pill{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+    background:var(--panel2); border:1px solid var(--line); font-size:12px; color:var(--sub)}
+  .pill.on{color:var(--ok); border-color:var(--ok)}
+  main{flex:1; display:flex; flex-direction:column; min-height:0}
+  #messages{flex:1; overflow:auto; padding:18px 16px; max-width:880px; width:100%; margin:0 auto}
+  .msg{margin:14px 0; display:flex}
+  .msg .av{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--panel2);margin-right:10px}
+  .msg.me{flex-direction:row-reverse}
+  .msg.me .av{margin:0 0 0 10px; background:var(--accent2)}
+  .bubble{background:var(--bub); padding:11px 14px; border-radius:12px; max-width:78%; white-space:pre-wrap; word-break:break-word}
+  .msg.me .bubble{background:var(--bubMe)}
+  .refs{margin-top:8px; font-size:12px; color:var(--sub)}
+  .ref{border-left:2px solid var(--accent); padding:4px 8px; margin:4px 0; background:var(--panel); border-radius:0 6px 6px 0; max-height:120px; overflow:auto}
+  .sys{text-align:center; color:var(--sub); font-size:12px; margin:8px 0}
+  .inputbar{border-top:1px solid var(--line); background:var(--panel); padding:12px 16px}
+  .inputwrap{max-width:880px; margin:0 auto; display:flex; gap:10px; align-items:flex-end}
+  textarea#input{
+    flex:1; resize:none; height:46px; max-height:160px; background:var(--panel2); color:var(--txt);
+    border:1px solid var(--line); border-radius:10px; padding:11px 12px; font:inherit; outline:none;
+  }
+  textarea#input:focus{border-color:var(--accent)}
+  .hint{color:var(--sub); font-size:11px; text-align:center; margin-top:6px; max-width:880px; margin-left:auto; margin-right:auto}
+  /* 抽屉 */
+  .drawer{position:fixed; top:0; right:0; height:100%; width:420px; max-width:92vw; background:var(--panel);
+    border-left:1px solid var(--line); transform:translateX(100%); transition:.22s ease; z-index:30; display:flex; flex-direction:column}
+  .drawer.open{transform:translateX(0)}
+  .drawer .dh{display:flex; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); font-weight:600}
+  .drawer .dh .x{margin-left:auto; cursor:pointer; color:var(--sub); font-size:18px}
+  .drawer .db{flex:1; overflow:auto; padding:14px 16px}
+  .sec{margin-bottom:18px; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .sec>h3{margin:0; padding:11px 14px; background:var(--panel2); font-size:13px; cursor:pointer; display:flex; align-items:center}
+  .sec>h3 .tg{margin-left:auto; color:var(--sub)}
+  .sec .body{padding:12px 14px; display:none}
+  .sec.open .body{display:block}
+  .field{margin:9px 0}
+  .field label{display:block; font-size:12px; color:var(--sub); margin-bottom:4px}
+  .field input,.field select,.field textarea{
+    width:100%; background:var(--panel2); color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; font:inherit; outline:none;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+  .field textarea{resize:vertical; min-height:60px}
+  .row{display:flex; gap:10px}.row>*{flex:1}
+  .chk{display:flex; align-items:center; gap:8px; margin:8px 0; font-size:13px; color:var(--txt)}
+  .chk input{width:auto}
+  .docitem{display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--panel2); border:1px solid var(--line); border-radius:9px; margin:7px 0}
+  .docitem .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .docitem .meta{font-size:11px; color:var(--sub)}
+  .drop{border:1.5px dashed var(--line); border-radius:12px; padding:18px; text-align:center; color:var(--sub); cursor:pointer; margin-bottom:10px}
+  .drop:hover{border-color:var(--accent); color:var(--txt)}
+  .overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:20; display:none}
+  .overlay.show{display:block}
+  .toast{position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel2);
+    border:1px solid var(--line); padding:10px 16px; border-radius:10px; z-index:50; font-size:13px; opacity:0; transition:.2s}
+  .toast.show{opacity:1}
+  .small{font-size:11px; color:var(--sub)}
+  .tag{display:inline-block; padding:1px 7px; border-radius:6px; background:var(--panel2); border:1px solid var(--line); font-size:11px; color:var(--sub); margin-left:6px}
+  code{background:var(--panel2); padding:1px 5px; border-radius:5px; font-size:12px}
+  a{color:var(--accent)}
+  kbd{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">RAG 配置助手 <small>纯前端 · 打开即用</small></div>
+  <div class="spacer"></div>
+  <span class="pill" id="demoPill">演示模式：关</span>
+  <button class="btn" id="btnDocs">📄 文档</button>
+  <button class="btn" id="btnCfg">⚙ 配置</button>
+</header>
+
+<main>
+  <div id="messages"></div>
+  <div class="inputbar">
+    <div class="inputwrap">
+      <textarea id="input" placeholder="输入你的问题，回车发送（Shift+Enter 换行）"></textarea>
+      <button class="btn primary" id="btnSend">发送</button>
+    </div>
+    <div class="hint" id="hint"></div>
+  </div>
+</main>
+
+<!-- 配置抽屉 -->
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="cfgDrawer">
+  <div class="dh">⚙ 配置 <span class="x" data-close="cfgDrawer">✕</span></div>
+  <div class="db">
+    <div class="field">
+      <label>快速预设（自动填地址，再填 Key 即可）</label>
+      <select id="preset">
+        <option value="">— 手动填写 —</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="qwen">通义千问 DashScope</option>
+        <option value="moonshot">Moonshot（Kimi）</option>
+        <option value="zhipu">智谱 GLM</option>
+        <option value="openai">OpenAI</option>
+        <option value="siliconflow">硅基流动 SiliconFlow</option>
+        <option value="ollama">本地 Ollama</option>
+      </select>
+    </div>
+
+    <div class="sec open"><h3>① 大模型（回答用）<span class="tg">▾</span></h3>
+      <div class="body">
+        <div class="field"><label>API Base URL</label><input data-cfg="llm.baseUrl" placeholder="https://api.deepseek.com/v1"></div>
+        <div class="field"><label>API Key</label><input type="password" data-cfg="llm.apiKey" placeholder="sk-..."></div>
+        <div class="field"><label>模型名</label><input data-cfg="llm.model" placeholder="deepseek-chat"></div>
+      </div>
+    </div>
+
+    <div class="sec open"><h3>② Embedding（向量化）<span class="tg">▾</span></h3>
+      <div class="body">
+        <div class="field"><label>API Base URL</label><input data-cfg="embed.baseUrl" placeholder="https://api.siliconflow.cn/v1"></div>
+        <div class="field"><label>API Key</label><input type="password" data-cfg="embed.apiKey" placeholder="sk-..."></div>
+        <div class="field"><label>模型名</label><input data-cfg="embed.model" placeholder="BAAI/bge-m3"></div>
+        <div class="row">
+          <div class="field"><label>向量维度</label><input type="number" data-cfg="embed.dim" placeholder="1024"></div>
+          <div class="field"><label>批大小</label><input type="number" data-cfg="embed.batch" placeholder="16"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec"><h3>③ 重排 Rerank（可选）<span class="tg">▾</span></h3>
+      <div class="body">
+        <div class="field"><label>API Base URL（留空则用大模型打分兜底）</label><input data-cfg="rerank.baseUrl" placeholder="https://api.siliconflow.cn/v1"></div>
+        <div class="field"><label>API Key</label><input type="password" data-cfg="rerank.apiKey"></div>
+        <div class="field"><label>模型名</label><input data-cfg="rerank.model" placeholder="BAAI/bge-reranker-v2-m3"></div>
+      </div>
+    </div>
+
+    <div class="sec open"><h3>④ 文档切块<span class="tg">▾</span></h3>
+      <div class="body">
+        <div class="field"><label>切块方式</label>
+          <select data-cfg="chunk.strategy">
+            <option value="fixed">按 Token 滑窗（推荐）</option>
+            <option value="semantic">语义切块（句向量断点）</option>
+            <option value="paragraph">按段落切块</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="field"><label>块大小（≈token）</label><input type="number" data-cfg="chunk.size" placeholder="200"></div>
+          <div class="field"><label>重叠（≈token）</label><input type="number" data-cfg="chunk.overlap" placeholder="30"></div>
+        </div>
+        <div class="field" id="semField" style="display:none"><label>语义断点阈值（0-1，越低切得越碎）</label><input type="number" step="0.01" data-cfg="chunk.semThreshold" placeholder="0.5"></div>
+        <div class="small">中文按字符近似计 token；重叠使相邻块共享部分文本，提升召回。</div>
+      </div>
+    </div>
+
+    <div class="sec open"><h3>⑤ 检索<span class="tg">▾</span></h3>
+      <div class="body">
+        <div class="field"><label>检索模式</label>
+          <select data-cfg="retrieve.mode">
+            <option value="semantic">仅语义（向量）</option>
+            <option value="hybrid">语义 + BM25 混合</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="field"><label>候选池 candidateK</label><input type="number" data-cfg="retrieve.candidateK" placeholder="20"></div>
+          <div class="field"><label>最终 TopK</label><input type="number" data-cfg="retrieve.topK" placeholder="5"></div>
+        </div>
+        <div class="field"><label>融合方式（混合时）</label>
+          <select data-cfg="retrieve.fusion">
+            <option value="rrf">RRF 倒数排名融合</option>
+            <option value="weighted">加权求和</option>
+          </select>
+        </div>
+        <div class="field"><label>拒答阈值（融合/重排分低于此值则提示无法回答；0=不拒答）</label><input type="number" step="0.01" data-cfg="retrieve.minScore" placeholder="0"></div>
+      </div>
+    </div>
+
+    <div class="sec"><h3>⑥ 问题改写（可选）<span class="tg">▾</span></h3>
+      <div class="body">
+        <label class="chk"><input type="checkbox" data-cfg="rewrite.enable"> 启用问题改写</label>
+        <div class="field"><label>改写模式</label>
+          <select data-cfg="rewrite.mode">
+            <option value="single">单查询改写</option>
+            <option value="multi">Multi-Query 多问</option>
+            <option value="hyde">HyDE 假设性文档</option>
+          </select>
+        </div>
+        <div class="field"><label>改写提示词（可选）</label><textarea data-cfg="rewrite.prompt" placeholder="把你的问题改写成更利于检索的清晰表述，只输出改写后的问题。"></textarea></div>
+      </div>
+    </div>
+
+    <div class="sec"><h3>⑦ 重排与回答<span class="tg">▾</span></h3>
+      <div class="body">
+        <label class="chk"><input type="checkbox" data-cfg="rerank.enable"> 启用结果重排（使用上方 Rerank 模型，未配置则大模型打分）</label>
+        <div class="field"><label>重排后进入上下文的数量</label><input type="number" data-cfg="rerank.topN" placeholder="5"></div>
+        <label class="chk"><input type="checkbox" data-cfg="gen.allowFallback"> 检索不足时仍让模型自由回答</label>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn primary" id="btnSaveCfg" style="flex:1">保存配置</button>
+      <button class="btn" id="btnClearData">清空全部</button>
+    </div>
+    <div class="small" style="margin-top:8px">配置保存在你自己的浏览器（localStorage），不会上传到任何服务器。演示模式下无需 Key 即可体验完整流程。</div>
+  </div>
+</div>
+
+<!-- 文档抽屉 -->
+<div class="drawer" id="docDrawer">
+  <div class="dh">📄 文档与切片 <span class="x" data-close="docDrawer">✕</span></div>
+  <div class="db">
+    <div class="drop" id="drop">点击或拖拽上传<br><span class="small">支持 .txt .md .csv .json .html .pdf .docx</span></div>
+    <input type="file" id="fileInput" multiple accept=".txt,.md,.csv,.json,.html,.pdf,.docx" style="display:none">
+    <div id="docList"></div>
+    <div id="chunkStat" class="small" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 可选：PDF / DOCX 解析库（失败不影响 txt/md 使用） -->
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+
+<script>
+"use strict";
+/* ============ 默认配置 ============ */
+const DEFAULTS = {
+  llm:{baseUrl:"",apiKey:"",model:"deepseek-chat"},
+  embed:{baseUrl:"",apiKey:"",model:"BAAI/bge-m3",dim:1024,batch:16},
+  rerank:{baseUrl:"",apiKey:"",model:"BAAI/bge-reranker-v2-m3"},
+  chunk:{strategy:"fixed",size:200,overlap:30,semThreshold:0.5},
+  retrieve:{mode:"hybrid",candidateK:20,topK:5,fusion:"rrf",minScore:0},
+  rewrite:{enable:false,mode:"single",prompt:""},
+  rerank:{enable:false,topN:5},
+  gen:{allowFallback:false},
+  demo:false
+};
+const PRESETS = {
+  deepseek:{llm:{baseUrl:"https://api.deepseek.com/v1",model:"deepseek-chat"}},
+  qwen:{llm:{baseUrl:"https://dashscope.aliyuncs.com/compatible-mode/v1",model:"qwen-plus"}},
+  moonshot:{llm:{baseUrl:"https://api.moonshot.cn/v1",model:"moonshot-v1-8k"}},
+  zhipu:{llm:{baseUrl:"https://open.bigmodel.cn/api/paas/v4",model:"glm-4-flash"}},
+  openai:{llm:{baseUrl:"https://api.openai.com/v1",model:"gpt-4o-mini"}},
+  siliconflow:{llm:{baseUrl:"https://api.siliconflow.cn/v1",model:"deepseek-ai/DeepSeek-V3"},
+               embed:{baseUrl:"https://api.siliconflow.cn/v1",model:"BAAI/bge-m3",dim:1024},
+               rerank:{baseUrl:"https://api.siliconflow.cn/v1",model:"BAAI/bge-reranker-v2-m3"}},
+  ollama:{llm:{baseUrl:"http://localhost:11434/v1",model:"llama3"},
+          embed:{baseUrl:"http://localhost:11434/v1",model:"nomic-embed-text",dim:768}}
+};
+
+/* ============ 工具 ============ */
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+function loadCfg(){
+  let c; try{c=JSON.parse(localStorage.getItem("rag_cfg")||"null")}catch(e){}
+  return deepMerge(structuredClone(DEFAULTS), c||{});
+}
+function saveCfg(c){ localStorage.setItem("rag_cfg", JSON.stringify(c)); }
+function deepMerge(a,b){ if(!(b&&typeof b==="object")) return b===undefined?a:b;
+  const o=Array.isArray(a)?[...a]:{...a};
+  for(const k in b){ o[k]= (a[k]&&typeof a[k]==="object"&&!Array.isArray(a[k])) ? deepMerge(a[k],b[k]) : b[k]; }
+  return o;
+}
+function toast(msg,ms=1800){ const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),ms); }
+function esc(s){ return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+/* ============ 文本 / 分词 ============ */
+function countTokens(s){
+  const cn=(s.match(/[一-鿿]/g)||[]).length;
+  const en=s.replace(/[一-鿿]/g," ").trim().split(/\s+/).filter(Boolean).length;
+  return cn+Math.ceil(en*1.3);
+}
+function grams(text){
+  const t=text.replace(/\s+/g,"");
+  const out=[];
+  for(let i=0;i<t.length;i++){ out.push(t[i]); if(i+1<t.length) out.push(t[i]+t[i+1]); }
+  return out;
+}
+/* 字符级滑窗（中文 token≈字符，足够简便） */
+function sliceByChars(text,size,overlap){
+  const step=Math.max(1,size-overlap); const out=[];
+  for(let i=0;i<text.length;i+=step){ out.push(text.slice(i,i+size)); if(i+size>=text.length) break; }
+  return out.length?out:[text];
+}
+function splitSentences(text){
+  return text.split(/(?<=[。！？!?\n])/).map(s=>s.trim()).filter(s=>s.length>0);
+}
+function splitParagraphs(text){
+  return text.split(/\n{2,}|\r\n{2,}/).map(s=>s.trim()).filter(s=>s.length>0);
+}
+
+/* ============ 切块策略 ============ */
+async function chunkText(text, cfg, embedFn){
+  const size=+cfg.chunk.size||200, ov=+cfg.chunk.overlap||30, strat=cfg.chunk.strategy;
+  if(strat==="paragraph"){
+    const ps=splitParagraphs(text); const out=[]; let buf="";
+    const maxSize=Math.max(size,50);
+    for(const p of ps){
+      if((buf?countTokens(buf)+countTokens(p):countTokens(p))<=maxSize){ buf=buf?buf+"\n\n"+p:p; }
+      else { if(buf) out.push(buf); buf=p; }
+    }
+    if(buf) out.push(buf);
+    // 段落重叠
+    if(ov>0 && out.length>1){
+      const step=Math.max(1,size-ov);
+      return out.flatMap(b=>sliceByChars(b,size,ov).map((c,i)=>i===0?c:c));
+    }
+    return out.length?out:[text];
+  }
+  if(strat==="semantic"){
+    const sents=splitSentences(text);
+    if(!embedFn || sents.length<=1) return sliceByChars(text,size,ov);
+    const vecs=await embedFn(sents);
+    const groups=[]; let cur=[sents[0]];
+    const thr=+cfg.chunk.semThreshold||0.5;
+    for(let i=1;i<sents.length;i++){
+      const sim=cosine(vecs[i-1],vecs[i]);
+      const wouldExceed=countTokens(cur.join("")+sents[i])>size;
+      if(sim<thr || wouldExceed){ groups.push(cur.join("")); cur=[sents[i]]; }
+      else cur.push(sents[i]);
+    }
+    if(cur.length) groups.push(cur.join(""));
+    return groups.length?groups:[text];
+  }
+  // fixed
+  return sliceByChars(text,size,ov);
+}
+
+/* ============ 向量 / 检索 ============ */
+function cosine(a,b){ let d=0,na=0,nb=0;
+  const n=Math.min(a.length,b.length);
+  for(let i=0;i<n;i++){ d+=a[i]*b[i]; na+=a[i]*a[i]; nb+=b[i]*b[i]; }
+  return (na&&nb)? d/Math.sqrt(na*nb) : 0;
+}
+function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
+function pseudoEmbed(text,dim){
+  const v=new Array(dim).fill(0);
+  for(const g of grams(text)){ const idx=hashStr(g)%dim; v[idx]+= (g.length===2?1.5:1); }
+  const norm=Math.sqrt(v.reduce((a,b)=>a+b*b,0))||1;
+  return v.map(x=>x/norm);
+}
+
+/* BM25（中文 bigram） */
+class BM25{
+  constructor(docs){ this.docs=docs.map(d=>grams(d)); this.df={}; this.N=this.docs.length;
+    for(const d of this.docs) for(const t of new Set(d)) this.df[t]=(this.df[t]||0)+1;
+    this.avg=this.docs.reduce((a,d)=>a+d.length,0)/(this.N||1);
+  }
+  score(q){ const qg=grams(q); const k=1.5,b=0.75;
+    return this.docs.map(d=>{ let s=0; const tf={}; for(const t of d) tf[t]=(tf[t]||0)+1;
+      for(const t of new Set(qg)){ const f=tf[t]||0; if(!f) continue;
+        const idf=Math.log(1+(this.N-this.df[t]+0.5)/(this.df[t]+0.5));
+        s+=idf*(f*(k+1))/(f+k*(1-b+b*d.length/this.avg)); }
+      return s; }); }
+}
+
+/* ============ API 调用 ============ */
+async function embedTexts(texts, cfg){
+  if(cfg.demo) return texts.map(t=>pseudoEmbed(t, 256));
+  const {baseUrl,apiKey,model}=cfg.embed;
+  if(!baseUrl||!apiKey) throw new Error("未配置 Embedding 的 Base URL 或 Key（或开启演示模式）");
+  const batch=+cfg.embed.batch||16; const all=[];
+  for(let i=0;i<texts.length;i+=batch){
+    const chunk=texts.slice(i,i+batch);
+    const res=await fetch(baseUrl.replace(/\/$/,"")+"/embeddings",{
+      method:"POST", headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},
+      body:JSON.stringify({model,input:chunk})
+    });
+    if(!res.ok) throw new Error("Embedding 调用失败："+res.status);
+    const j=await res.json();
+    for(const it of j.data) all.push(it.embedding);
+  }
+  return all;
+}
+async function llmChat(messages, cfg){
+  if(cfg.demo){ return "(演示模式未接入大模型) 以下是检索到的相关片段，可据此人工归纳答案。"; }
+  const {baseUrl,apiKey,model}=cfg.llm;
+  if(!baseUrl||!apiKey) throw new Error("未配置大模型的 Base URL 或 Key（或开启演示模式）");
+  const res=await fetch(baseUrl.replace(/\/$/,"")+"/chat/completions",{
+    method:"POST", headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},
+    body:JSON.stringify({model,messages,stream:false,temperature:0.3})
+  });
+  if(!res.ok) throw new Error("大模型调用失败："+res.status);
+  const j=await res.json();
+  return j.choices?.[0]?.message?.content || "(无返回)";
+}
+async function rerankAPI(query,docs,cfg){
+  const {baseUrl,apiKey,model}=cfg.rerank;
+  const res=await fetch(baseUrl.replace(/\/$/,"")+"/rerank",{
+    method:"POST", headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},
+    body:JSON.stringify({model,query,documents:docs,top_n:docs.length})
+  });
+  if(!res.ok) throw new Error("Rerank 调用失败："+res.status);
+  const j=await res.json();
+  // 兼容两种返回
+  if(Array.isArray(j.results)) return j.results.map(r=>({index:r.index,score:r.relevance_score}));
+  if(Array.isArray(j.data)) return j.data.map((r,i)=>({index:r.index??i,score:r.relevance_score??r.score}));
+  throw new Error("Rerank 返回格式不支持");
+}
+
+/* ============ 知识库（内存） ============ */
+const KB = { docs:[], chunks:[], vectors:[], bm25:null, built:false };
+async function indexDocs(cfg){
+  const texts=KB.chunks;
+  KB.vectors=await embedTexts(texts,cfg);
+  if(cfg.retrieve.mode==="hybrid") KB.bm25=new BM25(texts);
+  KB.built=true;
+}
+function search(query,cfg){
+  const candK=+cfg.retrieve.candidateK||20;
+  const K=60;
+  const semScores=KB.vectors.map(v=>cosine(currentQueryVec,v));
+  let cand;
+  if(cfg.retrieve.mode==="hybrid" && KB.bm25){
+    const bm=KB.bm25.score(query);
+    const bmMax=Math.max(...bm,1e-9);
+    const semMax=Math.max(...semScores,1e-9);
+    const pairs=KB.chunks.map((c,i)=>({i,cos:semScores[i],sem:semScores[i]/semMax,bm:bm[i]/bmMax}));
+    if(cfg.retrieve.fusion==="weighted"){
+      cand=pairs.map(p=>({i:p.i,cos:p.cos,sem:p.sem,bm:p.bm,fused:p.sem*0.6+p.bm*0.4}));
+    } else {
+      const semRank={}, bmRank={};
+      [...semScores.keys()].sort((a,b)=>semScores[b]-semScores[a]).forEach((idx,r)=>semRank[idx]=r+1);
+      [...bm.keys()].sort((a,b)=>bm[b]-bm[a]).forEach((idx,r)=>bmRank[idx]=r+1);
+      const MAXF=2/(K+1); // 双来源均排第一时的理论上限，用于把 RRF 归一到 0..1
+      cand=pairs.map(p=>({i:p.i,cos:p.cos,sem:p.sem,bm:p.bm,
+        fused:(1/(K+(semRank[p.i]||1e9))+1/(K+(bmRank[p.i]||1e9)))/MAXF}));
+    }
+  } else {
+    cand=KB.chunks.map((c,i)=>({i,cos:semScores[i],sem:semScores[i],bm:0,fused:semScores[i]}));
+  }
+  cand.sort((a,b)=>b.fused-a.fused);
+  return cand.slice(0,candK);
+}
+
+/* ============ 改写 ============ */
+async function rewriteQuery(q,cfg){
+  if(!cfg.rewrite.enable || cfg.demo) return [q];
+  const base = cfg.rewrite.prompt || "把你的问题改写成更利于知识库检索的清晰表述，只输出改写后的问题。";
+  if(cfg.rewrite.mode==="multi"){
+    const r=await llmChat([{role:"system",content:"生成 3 个针对不同角度的检索问法，每行一个，不要编号。"},{role:"user",content:q}],cfg);
+    return r.split(/\n+/).map(s=>s.trim()).filter(Boolean).slice(0,3).concat(q);
+  }
+  if(cfg.rewrite.mode==="hyde"){
+    const r=await llmChat([{role:"system",content:"写一段可能回答该问题的假设性文档片段。"},{role:"user",content:q}],cfg);
+    return [r,q];
+  }
+  const r=await llmChat([{role:"system",content:base},{role:"user",content:q}],cfg);
+  return [r.trim()||q];
+}
+
+/* ============ 重排 ============ */
+async function rerank(query,items,cfg){
+  if(!cfg.rerank.enable) return items;
+  const docs=items.map(it=>KB.chunks[it.i]);
+  try{
+    if(cfg.rerank.baseUrl && cfg.rerank.apiKey){
+      const res=await rerankAPI(query,docs,cfg);
+      const map=new Map(res.map(r=>[r.index,r.score]));
+      return items.map(it=>({...it,score:map.get(it.i)??it.fused})).sort((a,b)=>b.score-a.score);
+    }
+    // 大模型兜底打分
+    const scored=[];
+    for(const it of items){
+      const r=await llmChat([{role:"system",content:"判断片段与问题的相关性，只输出 0 到 1 的小数，如 0.82。"},
+        {role:"user",content:`问题：${query}\n片段：${KB.chunks[it.i].slice(0,400)}`}],cfg);
+      const m=r.match(/0?\.\d+/); scored.push({...it,score:m?+m[0]:it.fused});
+    }
+    return scored.sort((a,b)=>b.score-a.score);
+  }catch(e){ toast("重排失败，使用融合分："+e.message); return items; }
+}
+
+/* ============ UI 状态 ============ */
+let cfg = loadCfg();
+let currentQueryVec = null;
+
+function renderCfg(){
+  $$("[data-cfg]").forEach(el=>{
+    const path=el.dataset.cfg.split(".");
+    let v=cfg; for(const p of path) v=v?.[p];
+    if(el.type==="checkbox") el.checked=!!v;
+    else el.value = v===undefined?"":v;
+  });
+  updateDemoPill();
+  $("#semField").style.display = cfg.chunk.strategy==="semantic"?"block":"none";
+}
+function readCfg(){
+  $$("[data-cfg]").forEach(el=>{
+    const path=el.dataset.cfg.split(".");
+    let o=cfg; for(let i=0;i<path.length-1;i++) o=o[path[i]];
+    const last=path[path.length-1];
+    if(el.type==="checkbox") o[last]=el.checked;
+    else if(el.type==="number") o[last]= el.value===""?undefined:+el.value;
+    else o[last]=el.value;
+  });
+  return cfg;
+}
+function updateDemoPill(){
+  const p=$("#demoPill");
+  if(cfg.demo){ p.textContent="演示模式：开"; p.classList.add("on"); }
+  else { p.textContent="演示模式：关"; p.classList.remove("on"); }
+  $("#hint").textContent = cfg.demo
+    ? "演示模式：无需 Key，用本地伪向量演示检索流程（不调用真实模型）。"
+    : (cfg.llm.apiKey? "已配置模型 Key，将调用真实 API。" : "未填 Key：请在 ⚙ 配置 填写，或开启演示模式体验。");
+}
+
+/* 抽屉 */
+function openDrawer(id){ $("#"+id).classList.add("open"); $("#overlay").classList.add("show"); }
+function closeDrawer(id){ $("#"+id).classList.remove("open"); $("#overlay").classList.remove("show"); }
+
+/* 消息 */
+function addMsg(role,html,refs){
+  const m=document.createElement("div");
+  m.className="msg "+(role==="me"?"me":"");
+  const av=document.createElement("div"); av.className="av"; av.textContent= role==="me"?"你":"AI";
+  const b=document.createElement("div"); b.className="bubble"; b.innerHTML=html;
+  m.appendChild(av); m.appendChild(b);
+  if(refs&&refs.length){ const r=document.createElement("div"); r.className="refs";
+    r.innerHTML="<div>📎 引用：</div>"+refs.map((t,i)=>`<div class="ref">[${i+1}] ${esc(t.slice(0,300))}${t.length>300?"…":""}</div>`).join("");
+    b.appendChild(r); }
+  $("#messages").appendChild(m);
+  $("#messages").scrollTop=$("#messages").scrollHeight;
+}
+
+/* 文档解析 */
+async function parseFile(file){
+  const name=file.name.toLowerCase();
+  if(/\.(txt|md|csv|json|html?)$/.test(name)){
+    return await file.text();
+  }
+  if(name.endsWith(".pdf")){
+    if(!window.pdfjsLib) throw new Error("PDF 解析库未加载（检查网络/CDN），请改用 txt/md");
+    const buf=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    let txt="";
+    for(let i=1;i<=pdf.numPages;i++){ const p=await pdf.getPage(i); const c=await p.getTextContent();
+      txt+="\n"+c.items.map(it=>it.str).join(" "); }
+    return txt;
+  }
+  if(name.endsWith(".docx")){
+    if(!window.mammoth) throw new Error("DOCX 解析库未加载（检查网络/CDN），请改用 txt/md");
+    const buf=await file.arrayBuffer();
+    const r=await mammoth.extractRawText({arrayBuffer:buf});
+    return r.value;
+  }
+  throw new Error("不支持的文件类型："+file.name);
+}
+
+/* ============ 事件绑定 ============ */
+$("#btnCfg").onclick=()=>openDrawer("cfgDrawer");
+$("#btnDocs").onclick=()=>openDrawer("docDrawer");
+$("#overlay").onclick=()=>{ closeDrawer("cfgDrawer"); closeDrawer("docDrawer"); };
+$$("[data-close]").forEach(x=>x.onclick=()=>closeDrawer(x.dataset.close));
+
+$$(".sec>h3").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+
+$("#preset").onchange=(e)=>{
+  const p=PRESETS[e.target.value]; if(!p) return;
+  for(const k in p){ for(const f in p[k]){ const el=$(`[data-cfg="${k}.${f}"]`); if(el) el.value=p[k][f]; } }
+  toast("已填入 "+e.target.value+" 预设，记得填 Key");
+};
+
+$("#chunk\\.strategy") && ($("#chunk\\.strategy").onchange=e=>{ $("#semField").style.display=e.target.value==="semantic"?"block":"none"; });
+// 上面选择器可能失效，改用通用监听
+$$('[data-cfg="chunk.strategy"]').forEach(el=>el.onchange=e=>{ $("#semField").style.display=e.target.value==="semantic"?"block":"none"; });
+
+$("#btnSaveCfg").onclick=()=>{
+  cfg=readCfg(); saveCfg(cfg); updateDemoPill();
+  // 切换演示时若已索引则需重建
+  if(KB.built){ KB.built=false; toast("配置已保存；重新上传或 rebuild 后生效"); }
+  closeDrawer("cfgDrawer"); toast("配置已保存到本地浏览器");
+};
+
+$("#btnClearData").onclick=()=>{
+  if(!confirm("确定清空所有配置与已上传文档？")) return;
+  localStorage.removeItem("rag_cfg");
+  KB.docs=[]; KB.chunks=[]; KB.vectors=[]; KB.bm25=null; KB.built=false;
+  cfg=loadCfg(); renderCfg(); renderDocs(); toast("已清空");
+};
+
+/* 文件上传 */
+$("#drop").onclick=()=>$("#fileInput").click();
+$("#drop").ondragover=e=>{e.preventDefault(); $("#drop").style.borderColor="var(--accent)";};
+$("#drop").ondragleave=()=>{ $("#drop").style.borderColor="var(--line)"; };
+$("#drop").ondrop=e=>{ e.preventDefault(); handleFiles(e.dataTransfer.files); };
+$("#fileInput").onchange=e=>{ handleFiles(e.target.files); e.target.value=""; };
+
+async function handleFiles(files){
+  cfg=loadCfg();
+  for(const f of files){
+    try{
+      addSys(`解析 ${f.name} …`);
+      const text=await parseFile(f);
+      const chunks=await chunkText(text,cfg, async(sents)=>embedTexts(sents,cfg));
+      KB.docs.push({name:f.name,text,chunks});
+      KB.chunks.push(...chunks);
+      addSys(`✓ ${f.name}：切成 ${chunks.length} 块`);
+    }catch(err){ addSys(`✗ ${f.name} 失败：${err.message}`); }
+  }
+  renderDocs();
+  await rebuildIndex();
+}
+function addSys(t){ const d=document.createElement("div"); d.className="sys"; d.textContent=t; $("#messages").appendChild(d);
+  $("#messages").scrollTop=$("#messages").scrollHeight; }
+
+async function rebuildIndex(){
+  if(KB.chunks.length===0){ KB.built=false; updateChunkStat(); return; }
+  addSys("正在向量化并建索引 …");
+  try{ await indexDocs(cfg); addSys(`✓ 索引完成：${KB.chunks.length} 个切片`); }
+  catch(e){ addSys("✗ 索引失败："+e.message); }
+  updateChunkStat();
+}
+function updateChunkStat(){
+  $("#chunkStat").textContent = `当前共 ${KB.docs.length} 个文档，${KB.chunks.length} 个切片。${KB.built?"（已建索引）":"（未建索引）"}`;
+}
+function renderDocs(){
+  const list=$("#docList"); list.innerHTML="";
+  KB.docs.forEach((d,i)=>{
+    const el=document.createElement("div"); el.className="docitem";
+    el.innerHTML=`<div class="nm" title="${esc(d.name)}">${esc(d.name)}</div>
+      <div class="meta">${d.chunks.length} 块</div>
+      <button class="btn btn-mini" data-del="${i}">删除</button>`;
+    list.appendChild(el);
+  });
+  $$("[data-del]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.del;
+    KB.docs.splice(i,1);
+    KB.chunks=KB.docs.flatMap(d=>d.chunks);
+    KB.built=false; renderDocs(); rebuildIndex();
+  });
+  updateChunkStat();
+}
+
+/* 发送问题 */
+async function send(){
+  const ta=$("#input"); const q=ta.value.trim(); if(!q) return;
+  ta.value=""; addMsg("me",esc(q));
+  if(KB.chunks.length===0){ addMsg("ai","还没有上传文档。点右上角 📄 文档 上传，或先在 ⚙ 配置 开启演示模式。",[]); return; }
+  if(!KB.built){ try{ await rebuildIndex(); }catch(e){ addMsg("ai","索引失败："+e.message,[]); return; } }
+
+  try{
+    const qs=await rewriteQuery(q,cfg);
+    // 用首个改写做主检索向量（多查询可融合，这里取主查询）
+    currentQueryVec=(await embedTexts([qs[0]],cfg))[0];
+    let cand=search(qs[0],cfg);
+    cand=await rerank(qs[0],cand,cfg);
+    const topK=+cfg.retrieve.topK||5;
+    const top=cand.slice(0,topK);
+    const minS=+cfg.retrieve.minScore||0;
+    const best=top[0] ? (top[0].score ?? top[0].cos) : 0;
+    if(minS>0 && best<minS){
+      addMsg("ai",`抱歉，根据当前知识库检索到的内容相关性不足（最高分 ${best.toFixed(3)} < 阈值 ${minS}），无法可靠回答这个问题。\n\n你可以：换个问法、上传更多相关文档，或降低拒答阈值。`,[]);
+      return;
+    }
+    const ctx=top.map((it,i)=>`[${i+1}] ${KB.chunks[it.i]}`).join("\n\n");
+    const answer=await llmChat([
+      {role:"system",content:"你是企业知识库助手。只依据【资料】回答，不要编造。若资料不足，明确说明。用中文简洁回答，并标注引用编号。"},
+      {role:"user",content:`【资料】\n${ctx}\n\n【问题】${q}`}
+    ],cfg);
+    addMsg("ai",esc(answer), top.map(it=>KB.chunks[it.i]));
+  }catch(e){ addMsg("ai","出错了："+e.message,[]); }
+}
+$("#btnSend").onclick=send;
+$("#input").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); } });
+
+/* 初始化 */
+if(window.pdfjsLib){ try{ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"; }catch(e){} }
+renderCfg();
+renderDocs();
+addSys("欢迎使用 RAG 配置助手。右上角 ⚙ 配置 填模型 Key，📄 文档 上传资料即可问答。想零配置体验，开启演示模式即可。");
+</script>
+</body>
+</html>
